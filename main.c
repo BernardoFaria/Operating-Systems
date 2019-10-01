@@ -3,6 +3,7 @@
 #include <getopt.h>
 #include <string.h>
 #include <ctype.h>
+#include <time.h>      //Clock
 #include "fs.h"
 
 #define MAX_COMMANDS 150000
@@ -123,10 +124,14 @@ void applyCommands(){
 }
 
 int main(int argc, char* argv[]) {
+
+    /* Inicio do relogio */
+    clock_t start_t = clock();
+
+
     parseArgs(argc, argv);
 
     fs = new_tecnicofs();
-
 
     /* Cria file, abre input file para ler */
     FILE *inputFile;
@@ -152,6 +157,14 @@ int main(int argc, char* argv[]) {
     /* Fecha output file */
     fclose(outputFile);
 
+    /* Termina o clock */
+    clock_t end_t = clock();
+
     free_tecnicofs(fs);
+
+    /* Gives the time and prints it */
+    double total_t = (double)(end_t - start_t) / CLOCKS_PER_SEC;
+    printf("TecnicoFS completed in %0.4f seconds.\n", total_t);
+
     exit(EXIT_SUCCESS);
 }
