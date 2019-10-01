@@ -3,11 +3,14 @@
 #include <getopt.h>
 #include <string.h>
 #include <ctype.h>
-#include <time.h>      //Clock
+#include <time.h>           // Clock
+#include <pthread.h>        // Threads
 #include "fs.h"
 
 #define MAX_COMMANDS 150000
 #define MAX_INPUT_SIZE 100
+
+void *applyCommands();
 
 int numberThreads = 0;
 tecnicofs* fs;
@@ -67,7 +70,17 @@ void processInput(FILE *inputFile){
         }
         switch (token) {
             case 'c':
+                if(numTokens != 2)
+                    errorParse();
+                if(insertCommand(line))
+                    break;
+                return;
             case 'l':
+                if(numTokens != 2)
+                    errorParse();
+                if(insertCommand(line))
+                    break;
+                return;
             case 'd':
                 if(numTokens != 2)
                     errorParse();
@@ -83,7 +96,7 @@ void processInput(FILE *inputFile){
     }
 }
 
-void applyCommands(){
+void *applyCommands(){
     while(numberCommands > 0){
         const char* command = removeCommand();
         if (command == NULL){
@@ -121,36 +134,56 @@ void applyCommands(){
             }
         }
     }
+    return 0;
 }
 
 int main(int argc, char* argv[]) {
-
-    /* Inicio do relogio */
-    clock_t start_t = clock();
-
-
     parseArgs(argc, argv);
-
     fs = new_tecnicofs();
+
 
     /* Cria file, abre input file para ler */
     FILE *inputFile;
     char *inputName = argv[1];
     inputFile = fopen(inputName, "r");
 
-    /* Cria file, abre output file para escrever */
-    FILE *outputFile;
-    char *outputName = argv[2];
-    outputFile = fopen(outputName, "w");
-
 
     processInput(inputFile);
-    applyCommands();
 
 
     /* Fecha input file */
     fclose(inputFile);
 
+
+    /* Criação das tarefas */
+    numberThreads = atoi(argv[3]); // atoi converte string para int
+    pthread_t tid[numberThreads];
+    
+    for(int i = 0; i < numberThreads; i++) {
+        if(pthread_create(&tid[i], 0, applyCommands, inputCommands[i]) == 0) {
+            printf("Criada a tarefa %ld\n", tid[i]);
+        }
+        else {
+            printf("Erro na criação da tarefa\n");
+            exit(1);
+        }
+    }
+
+    for(int i = 0; i < numberThreads; i++) {
+        pthread_join(tid[i], NULL);
+    }
+
+    printf("Terminaram todas as threads\n");
+
+    /* Inicio do relogio */
+    clock_t start_t = clock();
+
+    /* Cria file, abre ou cria output file para escrever */
+    FILE *outputFile;
+    char *outputName = argv[2];
+    outputFile = fopen(outputName, "a");
+    
+    
     /* Recebe o output File para escrever */
     print_tecnicofs_tree(outputFile, fs);
 
