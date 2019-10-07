@@ -41,7 +41,7 @@ int insertCommand(char* data) {
 }
 
 char* removeCommand() {
-    if((numberCommands + 1)){
+    if(numberCommands > 0){
         numberCommands--;
         return inputCommands[headQueue++];  
     }
@@ -53,6 +53,7 @@ void errorParse(){
     //exit(EXIT_FAILURE);
 }
 
+
 /* Recebe um ficheiro input */
 void processInput(FILE *inputFile){
     char line[MAX_INPUT_SIZE];
@@ -61,7 +62,6 @@ void processInput(FILE *inputFile){
     while (fgets(line, sizeof(line)/sizeof(char), inputFile)) {
         char token;
         char name[MAX_INPUT_SIZE];
-
 
         int numTokens = sscanf(line, "%c %s", &token, name);
 
