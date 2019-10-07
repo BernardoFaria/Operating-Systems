@@ -11,6 +11,7 @@
 #define MAX_INPUT_SIZE 100
 
 void *applyCommands();
+pthread_mutex_t mutex;
 
 int numberThreads = 0;
 tecnicofs* fs;
@@ -97,6 +98,9 @@ void processInput(FILE *inputFile){
 }
 
 void *applyCommands(){
+
+    pthread_mutex_lock(&mutex);
+
     while(numberCommands > 0){
         const char* command = removeCommand();
         if (command == NULL){
@@ -134,6 +138,7 @@ void *applyCommands(){
             }
         }
     }
+    pthread_mutex_unlock(&mutex);
     return 0;
 }
 
@@ -153,7 +158,6 @@ int main(int argc, char* argv[]) {
 
     /* Fecha input file */
     fclose(inputFile);
-
 
     /* Criação das tarefas */
     numberThreads = atoi(argv[3]); // atoi converte string para int
