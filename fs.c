@@ -2,6 +2,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <pthread.h>        // Threads
+
+pthread_mutex_t mutex2;
+pthread_rwlock_t rwlock;
 
 
 int obtainNewInumber(tecnicofs* fs) {
@@ -25,16 +29,63 @@ void free_tecnicofs(tecnicofs* fs){
 }
 
 void create(tecnicofs* fs, char *name, int inumber){
+
+	#ifdef MUTEX
+    	pthread_mutex_lock(&mutex2);
+    #elif RWLOCK
+    	pthread_rwlock_wrlock(&rwlock);
+  	#endif
+  
 	fs->bstRoot = insert(fs->bstRoot, name, inumber);
+
+	#ifdef MUTEX
+    	pthread_mutex_unlock(&mutex2);
+  	#elif RWLOCK
+    	pthread_rwlock_unlock(&rwlock);
+  	#endif
 }
 
 void delete(tecnicofs* fs, char *name){
+
+	#ifdef MUTEX
+    	pthread_mutex_lock(&mutex2);
+    #elif RWLOCK
+    	pthread_rwlock_wrlock(&rwlock);
+  	#endif
+
 	fs->bstRoot = remove_item(fs->bstRoot, name);
+
+	#ifdef MUTEX
+    	pthread_mutex_unlock(&mutex2);
+  	#elif RWLOCK
+    	pthread_rwlock_unlock(&rwlock);
+  	#endif
 }
 
 int lookup(tecnicofs* fs, char *name){
+
+	#ifdef MUTEX
+    	pthread_mutex_lock(&mutex2);
+    #elif RWLOCK
+    	pthread_rwlock_rdlock(&rwlock);
+  	#endif
+
 	node* searchNode = search(fs->bstRoot, name);
-	if ( searchNode ) return searchNode->inumber;
+	
+	if ( searchNode ) {
+		#ifdef MUTEX
+    		pthread_mutex_unlock(&mutex2);
+  		#elif RWLOCK
+    		pthread_rwlock_unlock(&rwlock);
+  		#endif 
+		return searchNode->inumber;
+
+	}
+	#ifdef MUTEX
+    	pthread_mutex_unlock(&mutex2);
+  	#elif RWLOCK
+    	pthread_rwlock_unlock(&rwlock);
+  	#endif
 	return 0;
 }
 

@@ -98,10 +98,9 @@ void processInput(FILE *inputFile){
 }
 
 void *applyCommands(){
-
-    pthread_mutex_lock(&mutex);
-
+    /* Mutex para remover comandos */
     while(numberCommands > 0){
+        pthread_mutex_lock(&mutex);
         const char* command = removeCommand();
         if (command == NULL){
             continue;
@@ -115,30 +114,34 @@ void *applyCommands(){
             exit(EXIT_FAILURE);
         }
 
+         pthread_mutex_unlock(&mutex);
         int searchResult;
         int iNumber;
         switch (token) {
             case 'c':
                 iNumber = obtainNewInumber(fs);
                 create(fs, name, iNumber);
+                pthread_mutex_unlock(&mutex); 
                 break;
             case 'l':
+                pthread_mutex_unlock(&mutex);
                 searchResult = lookup(fs, name);
                 if(!searchResult)
                     printf("%s not found\n", name);
                 else
-                    printf("%s found with inumber %d\n", name, searchResult);
+                    printf("%s found with inumber %d\n", name, searchResult); 
                 break;
             case 'd':
+                pthread_mutex_unlock(&mutex);
                 delete(fs, name);
                 break;
             default: { /* error */
+                pthread_mutex_unlock(&mutex);
                 fprintf(stderr, "Error: command to apply\n");
                 exit(EXIT_FAILURE);
             }
         }
     }
-    pthread_mutex_unlock(&mutex);
     return 0;
 }
 
@@ -159,33 +162,41 @@ int main(int argc, char* argv[]) {
     /* Fecha input file */
     fclose(inputFile);
 
-    /* Criação das tarefas */
-    numberThreads = atoi(argv[3]); // atoi converte string para int
-    pthread_t tid[numberThreads];
-    
-    for(int i = 0; i < numberThreads; i++) {
-        if(pthread_create(&tid[i], 0, applyCommands, inputCommands[i]) == 0) {
-            printf("Criada a tarefa %ld\n", tid[i]);
+    /* Criação das tarefas e estratégias de sincronizacao */
+    #if defined MUTEX || defined RWLOCK
+
+        numberThreads = atoi(argv[3]); // atoi converte string para int
+        pthread_t tid[numberThreads];
+
+        for(int i = 0; i < numberThreads; i++) {
+            if(pthread_create(&tid[i], 0, applyCommands, inputCommands[i]) == 0) {
+                printf("Criada a tarefa %ld\n", tid[i]);
+            }
+            else {
+                printf("Erro na criação da tarefa\n");
+                exit(1);
+            }
         }
-        else {
-            printf("Erro na criação da tarefa\n");
-            exit(1);
+
+        for(int i = 0; i < numberThreads; i++) {
+            pthread_join(tid[i], NULL);
         }
-    }
+        printf("Terminaram todas as threads\n");
 
-    for(int i = 0; i < numberThreads; i++) {
-        pthread_join(tid[i], NULL);
-    }
+        /* Inicio do relogio com threads */
+        clock_t start_t = clock();
 
-    printf("Terminaram todas as threads\n");
+    #else
+        /* Inicio do relogio para tecnicofs-nosync */
+        clock_t start_t = clock();
+        applyCommands();
+    #endif
 
-    /* Inicio do relogio */
-    clock_t start_t = clock();
 
     /* Cria file, abre ou cria output file para escrever */
     FILE *outputFile;
     char *outputName = argv[2];
-    outputFile = fopen(outputName, "a");
+    outputFile = fopen(outputName, "w");
     
     
     /* Recebe o output File para escrever */
