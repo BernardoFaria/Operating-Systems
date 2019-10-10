@@ -11,7 +11,7 @@
 #define MAX_INPUT_SIZE 100
 
 void *applyCommands();
-pthread_mutex_t mutex;
+pthread_mutex_t mutex;      // Inicializacao do mutex
 
 int numberThreads = 0;
 tecnicofs* fs;
@@ -26,7 +26,7 @@ static void displayUsage (const char* appName){
 }
 
 static void parseArgs (long argc, char* const argv[]){
-    if (argc != 4) {
+    if (argc != 4) {                                    // Verifica se tem 4 argumentos agora
         fprintf(stderr, "Invalid format:\n");
         displayUsage(argv[0]);
     }
@@ -52,6 +52,7 @@ void errorParse(){
     fprintf(stderr, "Error: command invalid\n");
     //exit(EXIT_FAILURE);
 }
+
 
 
 /* Recebe um ficheiro input */
@@ -97,10 +98,15 @@ void processInput(FILE *inputFile){
     }
 }
 
+
+
 void *applyCommands(){
-    /* Mutex para remover comandos */
+
     while(numberCommands > 0){
+
+        /* Mutex para remover comandos */
         pthread_mutex_lock(&mutex);
+
         const char* command = removeCommand();
         if (command == NULL){
             continue;
@@ -114,17 +120,16 @@ void *applyCommands(){
             exit(EXIT_FAILURE);
         }
 
-         pthread_mutex_unlock(&mutex);
         int searchResult;
         int iNumber;
         switch (token) {
             case 'c':
                 iNumber = obtainNewInumber(fs);
+                pthread_mutex_unlock(&mutex);       // Unlock depois de criar o iNumber
                 create(fs, name, iNumber);
-                pthread_mutex_unlock(&mutex); 
                 break;
             case 'l':
-                pthread_mutex_unlock(&mutex);
+                pthread_mutex_unlock(&mutex);       // Unlock do mutex
                 searchResult = lookup(fs, name);
                 if(!searchResult)
                     printf("%s not found\n", name);
@@ -132,11 +137,11 @@ void *applyCommands(){
                     printf("%s found with inumber %d\n", name, searchResult); 
                 break;
             case 'd':
-                pthread_mutex_unlock(&mutex);
+                pthread_mutex_unlock(&mutex);       // Unlock do mutex
                 delete(fs, name);
                 break;
             default: { /* error */
-                pthread_mutex_unlock(&mutex);
+                pthread_mutex_unlock(&mutex);       // Unlock do mutex
                 fprintf(stderr, "Error: command to apply\n");
                 exit(EXIT_FAILURE);
             }
@@ -162,6 +167,11 @@ int main(int argc, char* argv[]) {
     /* Fecha input file */
     fclose(inputFile);
 
+
+    /* Iniciar o mutex */
+    pthread_mutex_init(&mutex, NULL);
+
+
     /* Criação das tarefas e estratégias de sincronizacao */
     #if defined MUTEX || defined RWLOCK
 
@@ -170,7 +180,7 @@ int main(int argc, char* argv[]) {
 
         for(int i = 0; i < numberThreads; i++) {
             if(pthread_create(&tid[i], 0, applyCommands, inputCommands[i]) == 0) {
-                printf("Criada a tarefa %ld\n", tid[i]);
+                //printf("Criada a tarefa %ld\n", tid[i]);
             }
             else {
                 printf("Erro na criação da tarefa\n");
@@ -181,7 +191,7 @@ int main(int argc, char* argv[]) {
         for(int i = 0; i < numberThreads; i++) {
             pthread_join(tid[i], NULL);
         }
-        printf("Terminaram todas as threads\n");
+        //printf("Terminaram todas as threads\n");
 
         /* Inicio do relogio com threads */
         clock_t start_t = clock();
@@ -192,6 +202,8 @@ int main(int argc, char* argv[]) {
         applyCommands();
     #endif
 
+    /* Destroy mutex */
+    pthread_mutex_destroy(&mutex);
 
     /* Cria file, abre ou cria output file para escrever */
     FILE *outputFile;

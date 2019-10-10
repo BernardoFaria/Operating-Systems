@@ -28,6 +28,8 @@ void free_tecnicofs(tecnicofs* fs){
 	free(fs);
 }
 
+
+/* Diretivas para as estrategias de sincronizacao */
 void create(tecnicofs* fs, char *name, int inumber){
 
 	#ifdef MUTEX
@@ -45,6 +47,8 @@ void create(tecnicofs* fs, char *name, int inumber){
   	#endif
 }
 
+
+/* Diretivas para as estrategias de sincronizacao */
 void delete(tecnicofs* fs, char *name){
 
 	#ifdef MUTEX
@@ -62,6 +66,8 @@ void delete(tecnicofs* fs, char *name){
   	#endif
 }
 
+
+/* Diretivas para as estrategias de sincronizacao */
 int lookup(tecnicofs* fs, char *name){
 
 	#ifdef MUTEX
