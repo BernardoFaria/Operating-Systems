@@ -1,9 +1,9 @@
+/* Sistemas Operativos, DEI/IST/ULisboa 2019-20 */
+
 /* bst.h */
 #ifndef BST_H
 #define BST_H
 #include <stdio.h>
-
-#define DELAY 5000
 
 typedef struct node {
     char* key;

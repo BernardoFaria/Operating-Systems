@@ -1,10 +1,14 @@
+/* Sistemas Operativos, DEI/IST/ULisboa 2019-20 */
+
 #ifndef FS_H
 #define FS_H
 #include "lib/bst.h"
+#include "sync.h"
 
 typedef struct tecnicofs {
     node* bstRoot;
     int nextINumber;
+    syncMech bstLock;
 } tecnicofs;
 
 int obtainNewInumber(tecnicofs* fs);

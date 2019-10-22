@@ -1,8 +1,11 @@
+/* Sistemas Operativos, DEI/IST/ULisboa 2019-20 */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 #include "bst.h"
+#include "../constants.h"
 
 void insertDelay(int cycles){
     for(int i=0; i < cycles; i++){}
