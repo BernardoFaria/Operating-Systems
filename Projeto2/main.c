@@ -12,8 +12,11 @@
 char* global_inputFile = NULL;
 char* global_outputFile = NULL;
 int numberThreads = 0;
+int numBuckets = 0;         //numero de buckets
 pthread_mutex_t commandsLock;
 tecnicofs* fs;
+
+node **hastable = (struct node**) malloc(sizeof(struct node*));     // malloc para hash table
 
 char inputCommands[MAX_COMMANDS][MAX_INPUT_SIZE];
 int numberCommands = 0;
@@ -123,6 +126,8 @@ void* applyCommands(){
             char name[MAX_INPUT_SIZE];
             sscanf(command, "%c %s", &token, name);
 
+            int key = hash(name, numBuckets);
+
             int iNumber;
             switch (token) {
                 case 'c':
@@ -185,8 +190,19 @@ void runThreads(FILE* timeFp){
     #endif
 }
 
+
+void hashCreate() {
+    for(int i = 1; i < numBuckets; i++) {
+        hashtable[i] = NULL;
+    }
+}
+
 int main(int argc, char* argv[]) {
     parseArgs(argc, argv);
+
+    numBuckets = atoi(argv[4]);
+    hashCreate();
+
     processInput();
     FILE * outputFp = openOutputFile();
     mutex_init(&commandsLock);
