@@ -18,7 +18,9 @@ int numBuckets = 0;                 //numero de buckets
 pthread_mutex_t commandsLock;
 tecnicofs* fs;
 
-hashtable_t* hashtable;             // hashtable
+// int finalFlag = 10;
+
+// hashtable_t* hashtable;             // hashtable
 sem_t prod, cons;                   // semaforos  
 
 
@@ -73,19 +75,19 @@ void *processInput(){
     inputFile = fopen(global_inputFile, "r");
     if(!inputFile){
         fprintf(stderr, "Error: Could not read %s\n", global_inputFile);
-        // sem_post(&cons);
         exit(EXIT_FAILURE);
     }
     char line[MAX_INPUT_SIZE];
     int lineNumber = 0;
 
     while (fgets(line, sizeof(line)/sizeof(char), inputFile)) {
-        // sem_wait(&prod);        // espera do produtor para poder avançar
         char token;
         char name[MAX_INPUT_SIZE];
         lineNumber++;
 
         int numTokens = sscanf(line, "%c %s", &token, name);
+
+        if(numTokens)
 
         /* perform minimal validation */
         if (numTokens < 1) {
@@ -95,11 +97,31 @@ void *processInput(){
             case 'c':
             case 'l':
             case 'd':
-            case 'r':                       // novo comando
                 if(numTokens != 2)
                     errorParse(lineNumber);
-                if(insertCommand(line))
+
+                while(numberCommands >= MAX_INPUT_SIZE) {
+                    sem_wait(&prod);
+                }
+
+                if(insertCommand(line)) {
+                    sem_post(&cons);
                     break;
+                }
+                return NULL;
+                break;
+            case 'r':                       // novo comando
+                if(numTokens != 3)
+                    errorParse(lineNumber);
+
+                while(numberCommands >= MAX_INPUT_SIZE) {
+                    sem_wait(&prod);
+                }
+
+                if(insertCommand(line)) {
+                    sem_post(&cons);
+                    break;
+                }
                 return NULL;
                 break;
             case '#':
@@ -108,11 +130,18 @@ void *processInput(){
                 errorParse(lineNumber);
             }
         }
+
+        // if(finalFlag == 0) {
+            // sempost();
+        // }
+
     }
     // sem_post(&cons);
     fclose(inputFile);
     return NULL;
 }
+
+
 
 FILE * openOutputFile() {
     FILE *fp;
@@ -124,40 +153,39 @@ FILE * openOutputFile() {
     return fp;
 }
 
-void* applyCommands(){
+
+
+void*  applyCommands(){
     while(1){
-        // sem_wait(&cons);                // faz esperar a tarefa consumidora
+        sem_wait(&cons);                   // wait para os consumidores
         mutex_lock(&commandsLock);
         if(numberCommands > 0){
             const char* command = removeCommand();
             if (command == NULL){
                 mutex_unlock(&commandsLock);
-                // sem_post(&prod);        // assinala os produtores para avançarem
-                continue;
+                continue;                  
             }
+            
+            sem_post(&prod);               // assinala os produtores
+
             char token;
             char name[MAX_INPUT_SIZE];
             char newName[MAX_INPUT_SIZE];                        // novo nome para o comando 'r'
             sscanf(command, "%c %s %s", &token, name, newName);  // adicionado
 
             int iNumber;
-            // int hashIdx = hash(name, numBuckets);  // index da hash table para o name
+            int hashIdx = hash(name, numBuckets);           // valor de hash
 
             switch (token) {
                 case 'c':
                     // printf("iNumber: %d\n", iNumber);
-                    // iNumber = obtainNewInumber(hashtable->hTable[hashIdx]->fs);
                     iNumber = obtainNewInumber(fs);
                     mutex_unlock(&commandsLock);
-                    // sem_post(&prod);                                    // assinala os produtores para avançarem
-                    create(fs, name, iNumber);
-                    // hashInsert(hashtable, hashIdx, name, iNumber);
+                    create(fs, name, iNumber, hashIdx);                    // novo argumento
                     break;
                 case 'l':
                     mutex_unlock(&commandsLock);
-                    // sem_post(&prod);                     // assinala os produtores para avançarem
-                    // int searchResult = lookup(hashtable->hTable[hashIdx]->fs, name);
-                    int searchResult = lookup(fs, name);
+                    int searchResult = lookup(fs, name, hashIdx);          // novo argumento
                     if(!searchResult)
                         printf("%s not found\n", name);
                     else
@@ -165,29 +193,26 @@ void* applyCommands(){
                     break;
                 case 'd':
                     mutex_unlock(&commandsLock);
-                    // sem_post(&prod);                // assinala os produtores para avançarem
-                    delete(fs, name);
-                    // hashDelete(hashtable, hashIdx, name);
+                    delete(fs, name, hashIdx);
                     break;
                 case 'r':
                     mutex_unlock(&commandsLock);
-                    //renameFile(fs, name, newName);
+                    renameFile(fs, name, newName, hashIdx);
                     break;
                 default: { /* error */
                     mutex_unlock(&commandsLock);
-                    // sem_post(&prod);                                // assinala os produtores para avançarem
                     fprintf(stderr, "Error: commands to apply\n");
-                    puts("default");
                     exit(EXIT_FAILURE);
                 }
             }
         }else{
             mutex_unlock(&commandsLock);
-            // sem_post(&prod);
+            sem_post(&prod);               // assinala os produtores
             return NULL;
         }
-    }
-    puts("terminei");   
+    }  
+    puts("terminei"); 
+
 }
 
 
@@ -199,7 +224,7 @@ void runThreads(FILE* timeFp){
     TIMER_READ(startTime);
 
     /* criação e lançamento da tarefa produtora */
-    pthread_t producer; // = (pthread_t*) malloc(sizeof(pthread_t));
+    pthread_t producer;
 
     if(pthread_create(&producer, NULL, processInput, NULL)) {
         perror("Erro na criação da thread producer\n");
@@ -208,7 +233,7 @@ void runThreads(FILE* timeFp){
     printf("Thread producer criada\n");
 
     /* criação e lançamento das tarefas escravas */
-    pthread_t tidConsum[numberThreads]; //= (pthread_t*) malloc(numberThreads*sizeof(pthread_t));
+    pthread_t tidConsum[numberThreads];
 
     for(int i = 0; i < numberThreads; i++) {
         if(pthread_create(&tidConsum[i], NULL, applyCommands, NULL)) {
@@ -227,11 +252,11 @@ void runThreads(FILE* timeFp){
         }
     }
 
+
     /* join da produtora */
     if(pthread_join(producer, NULL)) {
         perror("Can't join producer thread");
     }
-
 
     TIMER_READ(stopTime);
 
@@ -240,9 +265,10 @@ void runThreads(FILE* timeFp){
 }
 
 
+
     /* Funcao de inicializacao dos semaforos */
 void semaphores_init() {
-    if(sem_init(&prod, 0, MAX_INPUT_SIZE) != 0) {
+    if(sem_init(&prod, 0, MAX_COMMANDS) != 0) {
         perror("sem_init prod failed\n");
         exit(EXIT_FAILURE);
     }
@@ -260,7 +286,6 @@ void semaphores_init() {
 int main(int argc, char* argv[]) {
     parseArgs(argc, argv);
 
-    semaphores_init();          // inicializacao dos semaforos
 
     /* le numero de threads consumidoras */
     numberThreads = atoi(argv[3]);
@@ -268,19 +293,14 @@ int main(int argc, char* argv[]) {
     /* le numero de buckets */
     numBuckets = atoi(argv[4]);         
 
-    /* cria hash table */
-    hashtable = hashCreate(numBuckets);
-
-
-
-    // processInput();
 
     FILE * outputFp = openOutputFile();
+    semaphores_init();          // inicializacao dos semaforos
     mutex_init(&commandsLock);
-    fs = new_tecnicofs();
+    fs = new_tecnicofs(numBuckets);
 
     runThreads(stdout);
-    // print_tecnicofs_tree(outputFp, fs);
+    print_tecnicofs_tree(outputFp, fs, numBuckets);
     fflush(outputFp);
     fclose(outputFp);
 
@@ -288,8 +308,7 @@ int main(int argc, char* argv[]) {
     sem_destroy(&prod);             // destroy do semaforo dos produtores
     sem_destroy(&cons);             // destroy do semaforo dos consumidores
 
-    // free_tecnicofs(fs);
-    // hashFree(hashtable);
+    free_tecnicofs(fs, numBuckets);
     
     exit(EXIT_SUCCESS);
 }
