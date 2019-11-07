@@ -141,7 +141,6 @@ void* applyCommands(){
             sscanf(command, "%c %s %s", &token, name, newName);  // adicionado
 
             int iNumber;
-            // int hashIdx = hash(name, numBuckets);  // index da hash table para o name
 
             switch (token) {
                 case 'c':

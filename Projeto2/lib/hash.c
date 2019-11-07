@@ -42,16 +42,96 @@ hashtable_t *hashCreate(int numBuckets) {
 }
 
 
+hashentry_t *allocateEntry(char *key, tecnicofs* fs) {
 
-void hashInsert(hashtable_t *hashtable, int hashIdx, char *name, int iNumber) {
+	hashentry_t *entry;
+
+	/* aloca a memoria para a nova entrada */
+
+	if((entry = malloc(sizeof(entry))) == NULL) {
+		return NULL;
+	}
+	if((entry->key = malloc(sizeof(key))) == NULL) {
+		return NULL;
+	}
+	if((entry->fs = new_tecnicofs()) == NULL) {
+		return NULL;
+	}
+	
+	/* mete o proximo a null */
+	entry->next = NULL;
+
+	return entry;
+} 
+
+
+/* key = name */
+
+
+void hashInsert(hashtable_t *hashtable, char *name, int iNumber) {
+
+	/* Calculamos a funcao de hash */
+	int hashIdx = hash(name, hashtable->size);  
+
+	/* tentamos ver se existe um slot vazio */
+	hashentry_t *entry = hashtable->hTable[hashIdx];
+
+	/* ha slot vazio, insere imediatamente */
+	if(entry == NULL) {
+		hashtable->hTable[hashIdx] = allocateEntry(name, hashtable->hTable[hashIdx]->fs);
+		hashtable->hTable[hashIdx]->key = name;
+		create(hashtable->hTable[hashIdx]->fs, name, iNumber);
+		return;
+	}
+
+	/* nao ha slot vazio */
+	hashentry_t *prev;
+
+	/* percorremos todas as entradas */
+	while(entry != NULL) {
+		/* vemos se a key ja existe */
+		if(strcmp(entry->key, name) == 0) {
+			create(hashtable->hTable[hashIdx]->fs, name, iNumber);
+			return;
+		}
+		/* vamos para o proximo slot */
+		prev = entry;
+		entry = prev->next;
+	}
+	/* fim da hashtable, logo adicionamos */
+	prev->next = allocateEntry(name, hashtable->hTable[hashIdx]->fs);
+	hashtable->hTable[hashIdx]->key = name;
 	create(hashtable->hTable[hashIdx]->fs, name, iNumber);
+
 }
 
 
 
-int hashLookup(hashtable_t *hashtable, int hashIdx, char *name) {
-	int result = lookup(hashtable->hTable[hashIdx]->fs, name);
-	return result;
+int hashLookup(hashtable_t *hashtable, char *name) {
+
+	int result;
+
+	/* Calculamos a funcao de hash */
+	int hashIdx = hash(name, hashtable->size);  
+
+	/* tentamos ver se existe este slot */
+	hashentry_t *entry = hashtable->hTable[hashIdx];
+
+	/* não existe, logo acaba */
+	if(entry == NULL) return -1;
+
+	/* se existe, vamos procura-lo */
+	while(entry != NULL) {
+		/* retorna-o se o encontrar */
+		if(strcmp(entry->key, name) == 0) {
+			result = lookup(hashtable->hTable[hashIdx]->fs, name);
+			return result;
+		}
+		/* senao, passa ao proximo */
+		entry = entry->next;
+	}
+
+	return -1;
 }
 
 
