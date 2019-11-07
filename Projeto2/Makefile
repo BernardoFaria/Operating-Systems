@@ -2,7 +2,7 @@
 # Sistemas Operativos, DEI/IST/ULisboa 2019-20
 
 SOURCES = main.c fs.c sync.c
-SOURCES+= lib/bst.c
+SOURCES+= lib/bst.c lib/hash.c									# Adicionado lib/hash.c
 OBJS_NOSYNC = $(SOURCES:%.c=%.o)
 OBJS_MUTEX  = $(SOURCES:%.c=%-mutex.o)
 OBJS_RWLOCK = $(SOURCES:%.c=%-rwlock.o)
@@ -21,14 +21,18 @@ $(TARGETS):
 	$(LD) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
 
-### no sync ###
+### no sync ###	
+lib/hash.o: lib/hash.c lib/hash.h									# Adicionado lib/hash
 lib/bst.o: lib/bst.c lib/bst.h
 fs.o: fs.c fs.h lib/bst.h
 sync.o: sync.c sync.h constants.h
 main.o: main.c fs.h lib/bst.h constants.h lib/timer.h sync.h
-tecnicofs-nosync: lib/bst.o fs.o sync.o main.o
+tecnicofs-nosync: lib/hash.o lib/bst.o fs.o sync.o main.o
 
 ### MUTEX ###
+lib/hash-mutex.o: CFLAGS+=-DMUTEX									# Adicionado 
+lib/hash-mutex.o: lib/hash.c lib/hash.h								# Adicionado 
+
 lib/bst-mutex.o: CFLAGS+=-DMUTEX
 lib/bst-mutex.o: lib/bst.c lib/bst.h
 
@@ -40,9 +44,12 @@ sync-mutex.o: sync.c sync.h constants.h
 
 main-mutex.o: CFLAGS+=-DMUTEX
 main-mutex.o: main.c fs.h lib/bst.h constants.h lib/timer.h sync.h
-tecnicofs-mutex: lib/bst-mutex.o fs-mutex.o sync-mutex.o main-mutex.o
+tecnicofs-mutex: lib/hash-mutex.o lib/bst-mutex.o fs-mutex.o sync-mutex.o main-mutex.o	# Adicionado lib/hash-mutex.o
 
 ### RWLOCK ###
+lib/hash-rwlock.o: CFLAGS+=-DRWLOCK									# Adicionado
+lib/hash-rwlock.o: lib/hash.c lib/hash.h							# Adicionado
+
 lib/bst-rwlock.o: CFLAGS+=-DRWLOCK
 lib/bst-rwlock.o: lib/bst.c lib/bst.h
 
@@ -53,8 +60,8 @@ sync-rwlock.o: CFLAGS+=-DRWLOCK
 sync-rwlock.o: sync.c sync.h constants.h
 
 main-rwlock.o: CFLAGS+=-DRWLOCK
-main-rwlock.o: main.c fs.h lib/bst.h constants.h lib/timer.h sync.h
-tecnicofs-rwlock: lib/bst-rwlock.o fs-rwlock.o sync-rwlock.o main-rwlock.o
+main-rwlock.o: main.c fs.h lib/hash.h lib/bst.h constants.h lib/timer.h sync.h
+tecnicofs-rwlock: lib/hash-rwlock.o lib/bst-rwlock.o fs-rwlock.o sync-rwlock.o main-rwlock.o	# Adicionado lib/hash-rwlock.o
 
 
 %.o:

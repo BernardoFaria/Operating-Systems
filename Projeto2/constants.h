@@ -3,7 +3,7 @@
 #ifndef CONSTANTS_H
 #define CONSTANTS_H
 
-#define MAX_COMMANDS 150000
+#define MAX_COMMANDS 10             // passaram a ser 10 entradas
 #define MAX_INPUT_SIZE 100
 #define DELAY 5000
 
