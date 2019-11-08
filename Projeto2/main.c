@@ -83,9 +83,10 @@ void *processInput(){
     while (fgets(line, sizeof(line)/sizeof(char), inputFile)) {
         char token;
         char name[MAX_INPUT_SIZE];
+        char newName[MAX_INPUT_SIZE];
         lineNumber++;
 
-        int numTokens = sscanf(line, "%c %s", &token, name);
+        int numTokens = sscanf(line, "%c %s %s", &token, name, newName);
 
         if(numTokens)
 

@@ -21,11 +21,9 @@ tecnicofs* new_tecnicofs(int numBuckets){
 		perror("failed to allocate tecnicofs");
 		exit(EXIT_FAILURE);
 	}
-	fs->bstRoot = malloc(sizeof(node **)*numBuckets);
-	fs->bstLock = malloc(sizeof(syncMech *)*numBuckets);
 	fs->nextINumber = 0;
-
-
+	fs->bstRoot = malloc(sizeof(node **)*numBuckets);
+	fs->bstLock = malloc(sizeof(syncMech)*numBuckets);
 
 	for(int i = 0; i < numBuckets; i++) {
 		fs->bstRoot[i] = NULL;

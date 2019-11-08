@@ -5,9 +5,7 @@
 #include <stdlib.h>
 
 void sync_init(syncMech* sync){
-    puts("CONAAAA");
     int ret = syncMech_init(sync, NULL);
-    puts("ROCHE");
     if(ret != 0){
         perror("sync_init failed\n");
         exit(EXIT_FAILURE);
@@ -47,43 +45,43 @@ void sync_unlock(syncMech* sync){
 }
 
 void mutex_init(pthread_mutex_t* mutex){
-    // #if defined (RWLOCK) || defined (MUTEX)
+    #if defined (RWLOCK) || defined (MUTEX)
         int ret = pthread_mutex_init(mutex, NULL);
         if(ret != 0){
             perror("mutex_init failed\n");
             exit(EXIT_FAILURE);
         }
-    // #endif
+    #endif
 }
 
 void mutex_destroy(pthread_mutex_t* mutex){
-    // #if defined (RWLOCK) || defined (MUTEX)
+    #if defined (RWLOCK) || defined (MUTEX)
         int ret = pthread_mutex_destroy(mutex);
         if(ret != 0){
             perror("mutex_destroy failed\n");
             exit(EXIT_FAILURE);
         }
-    // #endif
+    #endif
 }
 
 void mutex_lock(pthread_mutex_t* mutex){
-    // #if defined (RWLOCK) || defined (MUTEX)
+    #if defined (RWLOCK) || defined (MUTEX)
         int ret = pthread_mutex_lock(mutex);
         if(ret != 0){
             perror("mutex_lock failed");
             exit(EXIT_FAILURE);
         }
-    // #endif
+    #endif
 }
 
 void mutex_unlock(pthread_mutex_t* mutex){
-    // #if defined (RWLOCK) || defined (MUTEX)
+    #if defined (RWLOCK) || defined (MUTEX)
         int ret = pthread_mutex_unlock(mutex);
         if(ret != 0){
             perror("mutex_unlock failed");
             exit(EXIT_FAILURE);
         }
-    //  #endif
+     #endif
 }
 
 int do_nothing(void* a){
