@@ -18,7 +18,7 @@ void free_tecnicofs(tecnicofs* fs, int numBuckets);
 void create(tecnicofs* fs, char *name, int inumber, int hashValue);         // novo argumento
 void delete(tecnicofs* fs, char *name, int hashValue);
 int lookup(tecnicofs* fs, char *name, int hashValue);
-void renameFile(tecnicofs* fs, char* actualName, char* newName, int hashIdx);           // nova operação
+void renameFile(tecnicofs* fs, char* actualName, char* newName, int hashIdxName, int numBuckets);           // nova operação
 void print_tecnicofs_tree(FILE * fp, tecnicofs *fs, int numBuckets);
 
 #endif /* FS_H */

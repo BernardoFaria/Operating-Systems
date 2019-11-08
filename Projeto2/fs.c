@@ -81,17 +81,21 @@ int lookup(tecnicofs* fs, char *name, int hashIdx){
 
 
 
-void renameFile(tecnicofs* fs, char* name, char* newName, int hashIdx) {
-	sync_wrlock(&(fs->bstLock[hashIdx]));
-	node* searchName = search(fs->bstRoot[hashIdx], name);
-	node* searchNewName = search(fs->bstRoot[hashIdx], newName);
+void renameFile(tecnicofs* fs, char* name, char* newName, int hashIdxName, int numBuckets) {
+	sync_wrlock(&(fs->bstLock[hashIdxName]));
+
+	int hashIdxNewName = hash(newName, numBuckets);
+
+	node* searchName = search(fs->bstRoot[hashIdxName], name);
+	node* searchNewName = search(fs->bstRoot[hashIdxNewName], newName);
 
 	if(searchName != NULL && searchNewName == NULL) {
-		int iNumber = fs->bstRoot[hashIdx]->inumber;
-		delete(fs, name, hashIdx);
-		create(fs, newName, iNumber, hashIdx);
+		int iNumber = fs->bstRoot[hashIdxName]->inumber;
+
+		fs->bstRoot[hashIdxName] = remove_item(fs->bstRoot[hashIdxName], name);
+		fs->bstRoot[hashIdxNewName] = insert(fs->bstRoot[hashIdxNewName], newName, iNumber);
 	}
-	sync_unlock(&(fs->bstLock[hashIdx]));
+	sync_unlock(&(fs->bstLock[hashIdxName]));
 }
 
 

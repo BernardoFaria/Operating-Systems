@@ -48,27 +48,31 @@ static void parseArgs (long argc, char* const argv[]){
     }
 }
 
+
+
 int insertCommand(char* data) {
-    if(numberCommands != MAX_COMMANDS) {
-        strcpy(inputCommands[numberCommands++], data);
-        sem_post(&cons);
-        return 1;
-    }
-    return 0;
+    strcpy(inputCommands[numberCommands++], data);
+    if(numberCommands == MAX_COMMANDS)              // se existirem 10 comandos no vetor,
+        numberCommands = 0;                         // volta a escrever no inicio
+    return 1;
 }
 
+
+
 char* removeCommand() {
-    if(numberCommands > 0){
-        numberCommands--;
-        return inputCommands[headQueue++];  
-    }
-    return NULL;
+    char * command = inputCommands[headQueue++];
+    if(headQueue == MAX_COMMANDS)                   // se a headQueue estiver cheia,
+        headQueue = 0;                              // mete-a a 0 
+    return command;
 }
+
+
 
 void errorParse(int lineNumber){
     fprintf(stderr, "Error: line %d invalid\n", lineNumber);
     exit(EXIT_FAILURE);
 }
+
 
 void *processInput(){
     FILE* inputFile;
@@ -88,7 +92,7 @@ void *processInput(){
 
         int numTokens = sscanf(line, "%c %s %s", &token, name, newName);
 
-        if(numTokens)
+        // if(numTokens)
 
         /* perform minimal validation */
         if (numTokens < 1) {
@@ -101,10 +105,7 @@ void *processInput(){
                 if(numTokens != 2)
                     errorParse(lineNumber);
 
-                while(numberCommands >= MAX_INPUT_SIZE) {
-                    sem_wait(&prod);
-                }
-
+                sem_wait(&prod);
                 if(insertCommand(line)) {
                     sem_post(&cons);
                     break;
@@ -114,11 +115,8 @@ void *processInput(){
             case 'r':                       // novo comando
                 if(numTokens != 3)
                     errorParse(lineNumber);
-
-                while(numberCommands >= MAX_INPUT_SIZE) {
-                    sem_wait(&prod);
-                }
-
+                
+                sem_wait(&prod);
                 if(insertCommand(line)) {
                     sem_post(&cons);
                     break;
@@ -132,11 +130,16 @@ void *processInput(){
             }
         }
 
-        // if(finalFlag == 0) {
-            // sempost();
-        // }
-
     }
+
+    /* for que insere comando 'f' para cada thread */
+    for(int i = 0; i < numberThreads; i++) {
+        sem_wait(&prod);    
+        if(insertCommand("f")) {
+            sem_post(&cons);
+        }
+    }
+
     // sem_post(&cons);
     fclose(inputFile);
     return NULL;
@@ -160,60 +163,60 @@ void*  applyCommands(){
     while(1){
         sem_wait(&cons);                   // wait para os consumidores
         mutex_lock(&commandsLock);
-        if(numberCommands > 0){
-            const char* command = removeCommand();
-            if (command == NULL){
-                mutex_unlock(&commandsLock);
-                continue;                  
-            }
-            
-            sem_post(&prod);               // assinala os produtores
-
-            char token;
-            char name[MAX_INPUT_SIZE];
-            char newName[MAX_INPUT_SIZE];                        // novo nome para o comando 'r'
-            sscanf(command, "%c %s %s", &token, name, newName);  // adicionado
-
-            int iNumber;
-            int hashIdx = hash(name, numBuckets);           // valor de hash
-
-            switch (token) {
-                case 'c':
-                    // printf("iNumber: %d\n", iNumber);
-                    iNumber = obtainNewInumber(fs);
-                    mutex_unlock(&commandsLock);
-                    create(fs, name, iNumber, hashIdx);                    // novo argumento
-                    break;
-                case 'l':
-                    mutex_unlock(&commandsLock);
-                    int searchResult = lookup(fs, name, hashIdx);          // novo argumento
-                    if(!searchResult)
-                        printf("%s not found\n", name);
-                    else
-                        printf("%s found with inumber %d\n", name, searchResult);
-                    break;
-                case 'd':
-                    mutex_unlock(&commandsLock);
-                    delete(fs, name, hashIdx);
-                    break;
-                case 'r':
-                    mutex_unlock(&commandsLock);
-                    renameFile(fs, name, newName, hashIdx);
-                    break;
-                default: { /* error */
-                    mutex_unlock(&commandsLock);
-                    fprintf(stderr, "Error: commands to apply\n");
-                    exit(EXIT_FAILURE);
-                }
-            }
-        }else{
+        const char* command = removeCommand();
+        if (command == NULL){
             mutex_unlock(&commandsLock);
-            sem_post(&prod);               // assinala os produtores
-            return NULL;
+            puts("unlock se null");
+            continue;                  
+        }
+
+        char token;
+        char name[MAX_INPUT_SIZE];
+        char newName[MAX_INPUT_SIZE];                          // novo nome para o comando 'r'
+        
+        sscanf(command, "%c %s %s", &token, name, newName);    // adicionado
+        sem_post(&prod);                                       // assinala os produtores
+        
+        int iNumber;
+        int hashIdx = hash(name, numBuckets);           // valor de hash
+
+        switch (token) {
+            case 'c':
+                iNumber = obtainNewInumber(fs);
+                mutex_unlock(&commandsLock);
+                create(fs, name, iNumber, hashIdx);                    // novo argumento
+                break;
+            case 'l':
+                mutex_unlock(&commandsLock);
+                int searchResult = lookup(fs, name, hashIdx);          // novo argumento
+                if(!searchResult)
+                    printf("%s not found\n", name);
+                else
+                    printf("%s found with inumber %d\n", name, searchResult);
+                break;
+            case 'd':
+                mutex_unlock(&commandsLock);
+                delete(fs, name, hashIdx);
+                break;
+            case 'r':
+                mutex_unlock(&commandsLock);
+                renameFile(fs, name, newName, hashIdx, numBuckets);
+                break;
+            case 'f':
+                sem_wait(&prod);    
+                if(insertCommand("f")) {
+                   sem_post(&cons);
+                }
+                mutex_unlock(&commandsLock);
+                return NULL; 
+            default: { /* error */
+                mutex_unlock(&commandsLock);
+                fprintf(stderr, "Error: commands to apply\n");
+                exit(EXIT_FAILURE);
+            }
         }
     }  
-    puts("terminei"); 
-
+    return NULL;
 }
 
 
@@ -231,7 +234,7 @@ void runThreads(FILE* timeFp){
         perror("Erro na criação da thread producer\n");
         exit(EXIT_FAILURE);
     }
-    printf("Thread producer criada\n");
+    // printf("Thread producer criada\n");
 
     /* criação e lançamento das tarefas escravas */
     pthread_t tidConsum[numberThreads];
@@ -241,7 +244,7 @@ void runThreads(FILE* timeFp){
             perror("Erro na criação das threads consumidoras\n");
             exit(EXIT_FAILURE);
         }
-        printf("Thread consumidora %3d criada\n", i);
+        // printf("Thread consumidora %3d criada\n", i);
     }
 
 
