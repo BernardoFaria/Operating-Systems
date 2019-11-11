@@ -22,11 +22,11 @@ tecnicofs* new_tecnicofs(int numBuckets){
 		exit(EXIT_FAILURE);
 	}
 	fs->nextINumber = 0;
-	fs->bstRoot = malloc(sizeof(node **)*numBuckets);
-	fs->bstLock = malloc(sizeof(syncMech)*numBuckets);
+	fs->bstRoot = malloc(sizeof(node **)*numBuckets);		// malloc da hashtable
+	fs->bstLock = malloc(sizeof(syncMech)*numBuckets);		// malloce dos mecanismos de sincronizacao
 
-	for(int i = 0; i < numBuckets; i++) {
-		fs->bstRoot[i] = NULL;
+	for(int i = 0; i < numBuckets; i++) {					// for que mete cada node da hash table a null
+		fs->bstRoot[i] = NULL;								// e inicializa um lock para cada bst
 		sync_init(&(fs->bstLock[i]));
 	}
 	return fs;
@@ -50,7 +50,6 @@ void free_tecnicofs(tecnicofs* fs, int numBuckets) {
 void create(tecnicofs* fs, char *name, int inumber, int hashIdx){
 	sync_wrlock(&(fs->bstLock[hashIdx]));
 	fs->bstRoot[hashIdx] = insert(fs->bstRoot[hashIdx], name, inumber);
-	// hashInsert(hashtable, fs->bstRoot, name);
 	sync_unlock(&(fs->bstLock[hashIdx]));
 }
 
@@ -80,20 +79,21 @@ int lookup(tecnicofs* fs, char *name, int hashIdx){
 
 
 
+/* Funcao de rename de um ficheiro */
 
 void renameFile(tecnicofs* fs, char* name, char* newName, int hashIdxName, int numBuckets) {
 	sync_wrlock(&(fs->bstLock[hashIdxName]));
 
-	int hashIdxNewName = hash(newName, numBuckets);
+	int hashIdxNewName = hash(newName, numBuckets);		// valor de hash do novo nome
 
-	node* searchName = search(fs->bstRoot[hashIdxName], name);
-	node* searchNewName = search(fs->bstRoot[hashIdxNewName], newName);
+	node* searchName = search(fs->bstRoot[hashIdxName], name);				// procura o node a ser mudado
+	node* searchNewName = search(fs->bstRoot[hashIdxNewName], newName);		// procura o node que vai substituir o acima
 
-	if(searchName != NULL && searchNewName == NULL) {
-		int iNumber = fs->bstRoot[hashIdxName]->inumber;
+	if(searchName != NULL && searchNewName == NULL) {						// se o primeiro for encontrado e o segundo nao, entao faz o rename
+		int iNumber = fs->bstRoot[hashIdxName]->inumber;					// guarda o inumber do primeiro
 
-		fs->bstRoot[hashIdxName] = remove_item(fs->bstRoot[hashIdxName], name);
-		fs->bstRoot[hashIdxNewName] = insert(fs->bstRoot[hashIdxNewName], newName, iNumber);
+		fs->bstRoot[hashIdxName] = remove_item(fs->bstRoot[hashIdxName], name);					// remove o primeiro node
+		fs->bstRoot[hashIdxNewName] = insert(fs->bstRoot[hashIdxNewName], newName, iNumber);	// substitui pelo novo
 	}
 	sync_unlock(&(fs->bstLock[hashIdxName]));
 }

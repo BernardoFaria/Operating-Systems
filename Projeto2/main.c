@@ -1,4 +1,5 @@
-/* Sistemas Operativos, DEI/IST/ULisboa 2019-20 */
+/* Grupo 31 Taguspark */
+/* Bernardo Gonçalves de Faria - número 87636 */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,9 +19,6 @@ int numBuckets = 0;                 //numero de buckets
 pthread_mutex_t commandsLock;
 tecnicofs* fs;
 
-// int finalFlag = 10;
-
-// hashtable_t* hashtable;             // hashtable
 sem_t prod, cons;                   // semaforos  
 
 
@@ -87,10 +85,10 @@ void *processInput(){
     while (fgets(line, sizeof(line)/sizeof(char), inputFile)) {
         char token;
         char name[MAX_INPUT_SIZE];
-        char newName[MAX_INPUT_SIZE];
+        char newName[MAX_INPUT_SIZE];           // novo nome
         lineNumber++;
 
-        int numTokens = sscanf(line, "%c %s %s", &token, name, newName);
+        int numTokens = sscanf(line, "%c %s %s", &token, name, newName);       // adicionado um argumento
 
         // if(numTokens)
 
@@ -104,10 +102,9 @@ void *processInput(){
             case 'd':
                 if(numTokens != 2)
                     errorParse(lineNumber);
-
-                sem_wait(&prod);
+                sem_wait(&prod);                // espera para o produtor
                 if(insertCommand(line)) {
-                    sem_post(&cons);
+                    sem_post(&cons);            // sinal para o consumidor
                     break;
                 }
                 return NULL;
@@ -115,10 +112,9 @@ void *processInput(){
             case 'r':                       // novo comando
                 if(numTokens != 3)
                     errorParse(lineNumber);
-                
-                sem_wait(&prod);
+                sem_wait(&prod);                // espera para o produtor
                 if(insertCommand(line)) {
-                    sem_post(&cons);
+                    sem_post(&cons);            // sinal para o consumidor
                     break;
                 }
                 return NULL;
@@ -132,15 +128,11 @@ void *processInput(){
 
     }
 
-    /* for que insere comando 'f' para cada thread */
-    for(int i = 0; i < numberThreads; i++) {
-        sem_wait(&prod);    
-        if(insertCommand("f")) {
-            sem_post(&cons);
-        }
+    sem_wait(&prod);            // espera para o produtor
+    if(insertCommand("f")) {    // mete um 'f' no final para avisar uma thread que vai sair
+        sem_post(&cons);        // sinal para o consumidor
     }
 
-    // sem_post(&cons);
     fclose(inputFile);
     return NULL;
 }
@@ -166,7 +158,6 @@ void*  applyCommands(){
         const char* command = removeCommand();
         if (command == NULL){
             mutex_unlock(&commandsLock);
-            puts("unlock se null");
             continue;                  
         }
 
@@ -200,12 +191,12 @@ void*  applyCommands(){
                 break;
             case 'r':
                 mutex_unlock(&commandsLock);
-                renameFile(fs, name, newName, hashIdx, numBuckets);
+                renameFile(fs, name, newName, hashIdx, numBuckets);     // novo comando
                 break;
             case 'f':
-                sem_wait(&prod);    
-                if(insertCommand("f")) {
-                   sem_post(&cons);
+                sem_wait(&prod);            // espera para os produtores
+                if(insertCommand("f")) {    // uma thread lè o 'f' enfiado pelo produtor, e sempre que essa thread sai, adiciona um 'f' para a proxima sair
+                   sem_post(&cons);         // sinal para os consumidores
                 }
                 mutex_unlock(&commandsLock);
                 return NULL; 
@@ -234,7 +225,6 @@ void runThreads(FILE* timeFp){
         perror("Erro na criação da thread producer\n");
         exit(EXIT_FAILURE);
     }
-    // printf("Thread producer criada\n");
 
     /* criação e lançamento das tarefas escravas */
     pthread_t tidConsum[numberThreads];
@@ -244,10 +234,7 @@ void runThreads(FILE* timeFp){
             perror("Erro na criação das threads consumidoras\n");
             exit(EXIT_FAILURE);
         }
-        // printf("Thread consumidora %3d criada\n", i);
     }
-
-
 
     /* join das consumidoras */
     for(int i = 0; i < numberThreads; i++) {
@@ -255,7 +242,6 @@ void runThreads(FILE* timeFp){
             perror("Can't join tidConsum threads");
         }
     }
-
 
     /* join da produtora */
     if(pthread_join(producer, NULL)) {
