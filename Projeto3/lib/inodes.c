@@ -1,9 +1,9 @@
-#include "inodes.h"
 #include <string.h>
 #include <pthread.h>
-#include "../tecnicofs-api-constants.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include "inodes.h"
+#include "../tecnicofs-api-constants.h"
 
 inode_t inode_table[INODE_TABLE_SIZE];
 pthread_mutex_t inode_table_lock;
@@ -141,9 +141,7 @@ int inode_get(int inumber,uid_t *owner, permission *ownerPerm, permission *other
         *othersPerm = inode_table[inumber].othersPermissions;
 
     if(fileContents && len > 0 && inode_table[inumber].fileContent){
-        if(len > ((int) strlen(inode_table[inumber].fileContent)))
-            len = ((int) strlen(inode_table[inumber].fileContent) + 1);
-        strncpy(fileContents, inode_table[inumber].fileContent, len-1);
+        strncpy(fileContents, inode_table[inumber].fileContent, len);
         fileContents[len] = '\0';
         unlock_inode_table();
         return strlen(fileContents);
