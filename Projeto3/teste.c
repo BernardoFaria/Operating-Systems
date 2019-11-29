@@ -25,7 +25,7 @@ int tfsCreate(char *filename, permission ownerPermissions, permission othersPerm
 
     write(sockfd, str, sizeof(char)*(strlen(str)+1));
     read(sockfd, &buffer, sizeof(int));
-    if(buffer != -4) return 0;
+    if(buffer != TECNICOFS_ERROR_FILE_ALREADY_EXISTS) return 0;
     else return TECNICOFS_ERROR_FILE_ALREADY_EXISTS;
 }
 
@@ -37,8 +37,7 @@ int tfsDelete(char *filename) {
 
     write(sockfd, str, sizeof(char)*strlen(str));
     read(sockfd, &buffer, sizeof(int));
-    if(buffer != 0) return buffer;
-    else return 0;
+    return 0;
 }
 
 
@@ -109,7 +108,6 @@ int tfsWrite(int fd, char *buffer, int len) {
 
 
 int tfsMount(char * address) {
-
     int servlen;
     struct sockaddr_un serv_addr;
 
@@ -141,18 +139,35 @@ int tfsUnmount() {
 
 
 
-// int main(int argc, char** argv) {
-//      if (argc != 2) {
-//         printf("Usage: %s sock_path\n", argv[0]);
-//         exit(0);
-//     }
-//     assert(tfsMount(argv[1]) == 0);
-//     printf("Test: create file sucess");
-//     assert(tfsCreate("a", RW, READ) == 0);
-//     printf("Test: create file with name that already exists");
-//     assert(tfsCreate("a", RW, READ) == TECNICOFS_ERROR_FILE_ALREADY_EXISTS);
-//     assert(tfsUnmount() == 0);
+int main(int argc, char** argv) {
+     if (argc != 2) {
+        printf("Usage: %s sock_path\n", argv[0]);
+        exit(0);
+    }
+    assert(tfsMount(argv[1]) == 0);
 
-//     return 0;
-// }
+    printf("Test: create file sucess\n");
+    assert(tfsCreate("a", RW, READ) == 0);
+    printf("Sucesso\n");
+
+    printf("Test2: create file sucess\n");
+    assert(tfsCreate("b", RW, READ) == 0);
+    printf("Sucess2\n");
+
+    printf("Test3: create file sucess\n");
+    assert(tfsCreate("c", RW, READ) == 0);
+    printf("Sucess3\n");
+
+    // printf("Test: delete file success\n");
+    // assert(tfsDelete("a") == 0);
+    // printf("Sucesso3\n");
+
+    // printf("Test: delete non existing file success\n");
+    // assert(tfsDelete("fabio") == -5);
+    // printf("Sucesso4\n");
+
+    assert(tfsUnmount() == 0);
+
+    return 0;
+}
 

@@ -17,6 +17,22 @@
 #include "lib/timer.h"
 #include "sync.h"
 #include <signal.h>
+#include "lib/inodes.h"
+
+
+typedef struct threadArgs {
+    uid_t uid;
+    int clientSockete;
+} threadArgs;
+
+
+typedef struct openFilesTable {
+    int inumber;
+    permission mode;
+} openFilesTable;
+
+
+
 
 char* global_inputFile = NULL;
 char* global_outputFile = NULL;
@@ -71,46 +87,80 @@ FILE * openOutputFile() {
 
 
 
-void* applyCommands(){
+void* applyCommands(void *arg){
 
     char buffer[MAXBUFFERSIZE];
+    uid_t uid = ((struct threadArgs*)arg)->uid;
+    int sockete = ((struct threadArgs*)arg)->clientSockete;
+
+    /* tabela de ficheiros abertos */
+    /* SO NO "OPEN" E NO "CLOSE" */
+    struct openFilesTable oPT[5];
+
 
     while(1){
+
         mutex_lock(&commandsLock);
-        char token;                                     // letra identificadora de qual comando executar
-        char arg1[MAX_INPUT_SIZE];                      // segundo argumento
-        char arg2[MAX_INPUT_SIZE];                      // terceiro argumento  
-        int iNumber;
-        int hashIdx = hash(arg1, numBuckets);           // valor de hash
-        int res;                                        // return da funcao se devolver int
-        char *content = NULL;                           // return da funcao se devolver string
+
+        char token, arg1[MAX_INPUT_SIZE], arg4[MAX_INPUT_SIZE];                     
+        int res, arg2, arg3, lookRes; 
+
+        int hashIdx = hash(arg1, numBuckets);   
+        // char *content = NULL;                            // return da funcao se devolver string
 
         /* Lê do cliente */
-        read(socketclient, buffer, MAXBUFFERSIZE);
-        
-        sscanf(buffer, "%c %s %s", &token, arg1, arg2);    // adicionado
+        int n = read(socketclient, buffer, MAXBUFFERSIZE);
+        if(n == 0){
+            // puts("Unmount");
+            return NULL;
+        }
+        sscanf(buffer, "%c", &token);    // adicionado
+        // printf("%s\n", buffer);
 
         switch (token) {
             case 'c':
-                iNumber = obtainNewInumber(fs);
+                sscanf(buffer, "%c %s %d", &token, arg1, &arg2);    // adicionado
                 mutex_unlock(&commandsLock);
-                create(fs, arg1, iNumber, hashIdx);                    // novo argumento
+                lookRes = lookup(fs, arg1, hashIdx);
+
+                int ownerPer = arg2/10;
+                int otherPerm = arg2 - (arg2 / 10) * 10;
+
+                if(lookRes == -1) { 
+                    res = create(fs, arg1, hashIdx, uid, ownerPer, otherPerm);      // cria o novo ficheiro
+                }
+                else res = TECNICOFS_ERROR_FILE_ALREADY_EXISTS;      
+                break;
+            case 'd':
+                sscanf(buffer, "%c %s", &token, arg1);
+                mutex_unlock(&commandsLock);
+                /* o lookup devolve o INUMBER!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*/
+                lookRes = lookup(fs, arg1, hashIdx);
+                if(!lookRes) {                            // se o ficheiro nao exister, da erro
+                    res = TECNICOFS_ERROR_FILE_NOT_FOUND;
+                }
+                else res = delete(fs, arg1, lookRes, uid);
                 break;
             case 'l':
                 mutex_unlock(&commandsLock);
-                int searchResult = lookup(fs, arg1, hashIdx);          // novo argumento
-                if(!searchResult)
-                    printf("%s not found\n", arg1);
-                else
-                    printf("%s found with inumber %d\n", arg1, searchResult);
-                break;
-            case 'd':
-                mutex_unlock(&commandsLock);
-                delete(fs, arg1, hashIdx);
+                // int searchResult = lookup(fs, arg1, hashIdx);          // novo argumento
+                // if(!searchResult)
+                //     printf("%s not found\n", arg1);
+                // else
+                //     printf("%s found with inumber %d\n", arg1, searchResult);
                 break;
             case 'r':
+                sscanf(buffer, "%c %s %s", &token, arg1, arg4);    // adicionado
                 mutex_unlock(&commandsLock);
-                renameFile(fs, arg1, arg2, hashIdx, numBuckets);     // novo comando
+                // if(!(lookup(fs, arg1, hashIdx))) {
+                //     res = TECNICOFS_ERROR_FILE_NOT_FOUND;
+                // }
+                // else if (lookup(fs, arg4, hashIdx)) {
+                //     res = TECNICOFS_ERROR_FILE_ALREADY_EXISTS;
+                // }
+                // else {
+                //     res = renameFile(fs, arg1, arg4, hashIdx, numBuckets, uid);
+                // }
                 break;
             case 'o':
                 mutex_unlock(&commandsLock);
@@ -127,9 +177,10 @@ void* applyCommands(){
                 exit(EXIT_FAILURE);
             }
         }
-
-    write(socketclient, &res, sizeof(int));
-    if(content) write(socketclient, content, sizeof(char)*res);
+    if(write(socketclient, &res, sizeof(int)) < 0) {
+        perror("Falhou no write");
+    }
+    // if(content) write(socketclient, content, sizeof(char)*res);
 
     }  
     return NULL;
@@ -142,15 +193,23 @@ void* applyCommands(){
 int main(int argc, char* argv[]) {
     parseArgs(argc, argv);
 
-    struct sockaddr_un serverAddress, clientAddress; 
-    int servlen, clientDimension, childpid, i;
+    /* Estruturas e variáveis */
+    int servlen, i;
+    struct sockaddr_un serverAddress; 
     struct ucred credentials;
 
-    /* le nome do socket */
+
+    /* nome do socket */
     nomesocket = argv[1];
 
-    /* le numero de buckets */
+    /* numero de buckets */
     numBuckets = atoi(argv[3]);   
+
+
+    
+    fs = new_tecnicofs(numBuckets);
+    mutex_init(&commandsLock);
+    inode_table_init();
 
 
     /* criacao do socket do servidor */
@@ -159,6 +218,7 @@ int main(int argc, char* argv[]) {
         exit(EXIT_FAILURE); 
     } 
 
+    /* remove caso haja lixo */
     unlink(nomesocket);
 
     bzero((char *)&serverAddress, sizeof(serverAddress)); 
@@ -174,7 +234,8 @@ int main(int argc, char* argv[]) {
 
     /* ciclo para aceitar pedidos */
     for(;;) {
-    
+
+
         /* aceita ligacao */
         if((socketclient = accept(sockfd, NULL, NULL)) < 0) {
             perror("Erro ao criar ligacao - accept");
@@ -183,33 +244,34 @@ int main(int argc, char* argv[]) {
         /* Verifica se ocorreu ctrl+c */
         // signal(SIGINT, trataCtrlC);
 
-        int len = sizeof(struct ucred);   
+        /* saber qual o cliente a fazer a conecao */
+        socklen_t len = sizeof(struct ucred);   
         if(getsockopt(socketclient, SOL_SOCKET, SO_PEERCRED, &credentials, &len) == -1) { // queremos o user id (UID)
             perror("getsockopt failed");
         }
 
-        printf("pid=%ld, euid=%ld, egid=%ld\n",(long) credentials.pid, (long) credentials.uid, (long) credentials.gid);
-        
+        /* Alocacao da estrutura passada na thread */
+        struct threadArgs *Allen = (struct threadArgs *)malloc(sizeof(struct threadArgs));
+        Allen->uid = credentials.uid;
+        Allen->clientSockete = socketclient;
+
+        /* Criacao das threads */
         pthread_t tid[MAXTHREADS];
-        
-        if(pthread_create(&tid[i++], NULL, applyCommands, &socketclient) != 0 ) {
+        if(pthread_create(&tid[i++], NULL, applyCommands, (void *)Allen) != 0 ) {
            printf("Failed to create thread\n");
         }
 
         
     }
-
-
+    
     FILE * outputFp = openOutputFile();
-    mutex_init(&commandsLock);
-    fs = new_tecnicofs(numBuckets);
 
     print_tecnicofs_tree(outputFp, fs, numBuckets);
     fflush(outputFp);
     fclose(outputFp);
 
     mutex_destroy(&commandsLock);
-
+    inode_table_destroy();
     free_tecnicofs(fs, numBuckets);
     
     exit(EXIT_SUCCESS);
