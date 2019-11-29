@@ -108,23 +108,34 @@ int lookup(tecnicofs* fs, char *name, int hashIdx){
 
 /* Funcao de rename de um ficheiro */
 
-int renameFile(tecnicofs* fs, char* actualName, char* newName, int hashIdxName, int numBuckets, uid_t uid) {
+int renameFile(tecnicofs* fs, char* actualName, char* newName, int hashIdxName, int numBuckets, uid_t uid, int inumberOld) {
 	sync_wrlock(&(fs->bstLock[hashIdxName]));
 
 	int hashIdxNewName = hash(newName, numBuckets);		// valor de hash do novo nome
+	int res;
 
-	node* searchName = search(fs->bstRoot[hashIdxName], actualName);				// procura o node a ser mudado
-	node* searchNewName = search(fs->bstRoot[hashIdxNewName], newName);		// procura o node que vai substituir o acima
+	ownerUID = (uid_t *) malloc(sizeof(uid_t*));
+	inode_get(inumberOld, ownerUID, NULL, NULL, NULL, 0);
 
-	if(searchName != NULL && searchNewName == NULL) {						// se o primeiro for encontrado e o segundo nao, entao faz o rename
-		int iNumber = fs->bstRoot[hashIdxName]->inumber;					// guarda o inumber do primeiro
-
-		fs->bstRoot[hashIdxName] = remove_item(fs->bstRoot[hashIdxName], actualName);					// remove o primeiro node
-		fs->bstRoot[hashIdxNewName] = insert(fs->bstRoot[hashIdxNewName], newName, iNumber);	// substitui pelo novo
+	if((long)uid != (long)*ownerUID) {
+		res = TECNICOFS_ERROR_PERMISSION_DENIED;
+		sync_unlock(&(fs->bstLock[hashIdxName]));
 	}
-	sync_unlock(&(fs->bstLock[hashIdxName]));
 
-	return 0;
+	else {
+		node* searchName = search(fs->bstRoot[hashIdxName], actualName);				// procura o node a ser mudado
+		node* searchNewName = search(fs->bstRoot[hashIdxNewName], newName);		// procura o node que vai substituir o acima
+
+		if(searchName != NULL && searchNewName == NULL) {						// se o primeiro for encontrado e o segundo nao, entao faz o rename
+			int iNumber = fs->bstRoot[hashIdxName]->inumber;					// guarda o inumber do primeiro
+
+			fs->bstRoot[hashIdxName] = remove_item(fs->bstRoot[hashIdxName], actualName);					// remove o primeiro node
+			fs->bstRoot[hashIdxNewName] = insert(fs->bstRoot[hashIdxNewName], newName, iNumber);	// substitui pelo novo
+		}
+		sync_unlock(&(fs->bstLock[hashIdxName]));
+		res = 0;
+	}
+	return res;
 }
 
 
