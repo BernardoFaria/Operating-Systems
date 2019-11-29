@@ -21,7 +21,7 @@ int tfsCreate(char *filename, permission ownerPermissions, permission othersPerm
 
     write(sockfd, str, sizeof(char)*(strlen(str)+1));
     read(sockfd, &buffer, sizeof(int));
-    if(buffer != -4) return 0;
+    if(buffer != TECNICOFS_ERROR_FILE_ALREADY_EXISTS) return 0;
     else return TECNICOFS_ERROR_FILE_ALREADY_EXISTS;
 }
 
@@ -33,7 +33,8 @@ int tfsDelete(char *filename) {
 
     write(sockfd, str, sizeof(char)*(strlen(str)+1));
     read(sockfd, &buffer, sizeof(int));
-    if(buffer != 0) return buffer;
+    if(buffer == TECNICOFS_ERROR_FILE_NOT_FOUND) return TECNICOFS_ERROR_FILE_NOT_FOUND;
+    else if(buffer == TECNICOFS_ERROR_OTHER) return TECNICOFS_ERROR_OTHER;
     else return 0;
 }
 
@@ -44,7 +45,7 @@ int tfsDelete(char *filename) {
 int tfsRename(char *filenameOld, char *filenameNew) {
     
     char str[MAXLEN];
-    sprintf(str, "r %s %s%c", filenameOld, filenameNew, '\0');
+    sprintf(str, "r %s %s%c", filenameOld,filenameNew, '\0');
 
     write(sockfd, str, sizeof(char)*(strlen(str)+1));
     read(sockfd, &buffer, sizeof(int));

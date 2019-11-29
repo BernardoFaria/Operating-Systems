@@ -94,11 +94,11 @@ void* applyCommands(void *arg){
 
     char buffer[MAXBUFFERSIZE];
     uid_t uid = ((struct threadArgs*)arg)->uid;
-    int sockete = ((struct threadArgs*)arg)->clientSockete;
+    // int sockete = ((struct threadArgs*)arg)->clientSockete;
 
     /* tabela de ficheiros abertos */
     /* SO NO "OPEN" E NO "CLOSE" */
-    struct openFilesTable oPT[5];
+    // struct openFilesTable oPT[5];
 
 
     while(1){
@@ -106,7 +106,7 @@ void* applyCommands(void *arg){
         mutex_lock(&commandsLock);
 
         char token, arg1[MAX_INPUT_SIZE], arg4[MAX_INPUT_SIZE];                     
-        int res, arg2, arg3, lookRes, lookRes2; 
+        int res, arg2, lookRes, lookRes2; 
 
         int hashIdx = hash(arg1, numBuckets);   
         // char *content = NULL;                            // return da funcao se devolver string
@@ -133,9 +133,6 @@ void* applyCommands(void *arg){
                 else res = TECNICOFS_ERROR_FILE_ALREADY_EXISTS;     // se existir, da erro
                 break;
             case 'd':
-                /*
-                *   falta verifcar se uid = owner !!!!!!!!!!!!!!!!!!!!!!
-                */
                 sscanf(buffer, "%c %s", &token, arg1);
                 mutex_unlock(&commandsLock);
 

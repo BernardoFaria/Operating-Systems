@@ -8,6 +8,7 @@
 #include <string.h>
 #include "sync.h"
 #include "lib/inodes.h"
+#include <sys/types.h>
 
 
 /* Variaveis para usar o inode_get */
@@ -69,24 +70,21 @@ int delete(tecnicofs* fs, char *name, int hashIdx, int inumberLook, uid_t uid){
 	sync_wrlock(&(fs->bstLock[hashIdx]));
 
 	int res;
-	// printf("hashIdc: %d\n", hashIdx);
-	// printf("inumberLook: %d\n", inumberLook);
-	// inode_get(inumberLook, ownerUID, NULL, NULL, NULL, 0);
-	// int uidOwner = 
+	ownerUID = (uid_t *) malloc(sizeof(uid_t*));
 
-	// printf("uid: %d    owner: %c\n", (int)uid, (int)ownerUID);
+	inode_get(inumberLook, ownerUID, NULL, NULL, NULL, 0);
 	
-	// if((long)uid != (long)ownerUID) {
-	// 	res = TECNICOFS_ERROR_OTHER;
-	// 	sync_unlock(&(fs->bstLock[hashIdx]));
-	// }
+	if((long)uid != (long)*ownerUID) {
+		res = TECNICOFS_ERROR_OTHER;
+		sync_unlock(&(fs->bstLock[hashIdx]));
+	}
 
-	// else {
+	else {
 		fs->bstRoot[hashIdx] = remove_item(fs->bstRoot[hashIdx], name);
 		res = inode_delete(inumberLook);
 		if(res != 0) res = TECNICOFS_ERROR_OTHER;
 		sync_unlock(&(fs->bstLock[hashIdx]));
-	// }
+	}
 	return res;
 }
 

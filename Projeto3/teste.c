@@ -154,9 +154,9 @@ int main(int argc, char** argv) {
     assert(tfsCreate("a", RW, READ) == 0);
     printf("Sucesso\n");
 
-    printf("Test: rename file name\n");
-    assert(tfsRename("a", "bcd") == 0);
-    printf("Sucesso\n");
+    // printf("Test: rename file name\n");
+    // assert(tfsRename("a", "bcd") == 0);
+    // printf("Sucesso\n");
 
     // printf("Test2: create file sucess\n");
     // assert(tfsCreate("b", RW, READ) == 0);
@@ -167,11 +167,16 @@ int main(int argc, char** argv) {
     // printf("Sucess3\n");
 
     // printf("Test: delete file success\n");
-    // assert(tfsDelete("a") == 0);
+    // assert(tfsDelete("a") == TECNICOFS_ERROR_FILE_NOT_FOUND);
     // printf("Sucesso4\n");
 
-    // printf("Test: delete file that does not exist\n");
-    // assert(tfsDelete("d") == TECNICOFS_ERROR_FILE_NOT_FOUND);
+    printf("Test: delete file success\n");
+    assert(tfsDelete("a") == 0);
+    printf("Sucesso4\n");
+
+    printf("Test: delete file that does not exist\n");
+    assert(tfsDelete("d") == TECNICOFS_ERROR_FILE_NOT_FOUND);
+    printf("Sucesso");
     
     puts("acabou o teste");
     assert(tfsUnmount() == 0);
