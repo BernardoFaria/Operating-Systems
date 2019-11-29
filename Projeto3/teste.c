@@ -53,7 +53,9 @@ int tfsRename(char *filenameOld, char *filenameNew) {
 
     write(sockfd, str, sizeof(char)*(strlen(str)+1));
     read(sockfd, &buffer, sizeof(int));
-    return 0;
+    if(buffer == TECNICOFS_ERROR_FILE_NOT_FOUND) return TECNICOFS_ERROR_FILE_NOT_FOUND;
+    else if (buffer == TECNICOFS_ERROR_FILE_ALREADY_EXISTS) return TECNICOFS_ERROR_FILE_ALREADY_EXISTS;
+    else return 0;
 }
 
 
@@ -152,20 +154,24 @@ int main(int argc, char** argv) {
     assert(tfsCreate("a", RW, READ) == 0);
     printf("Sucesso\n");
 
-    printf("Test2: create file sucess\n");
-    assert(tfsCreate("b", RW, READ) == 0);
-    printf("Sucess2\n");
+    printf("Test: rename file name\n");
+    assert(tfsRename("a", "bcd") == 0);
+    printf("Sucesso\n");
 
-    printf("Test3: create file sucess\n");
-    assert(tfsCreate("c", RW, READ) == 0);
-    printf("Sucess3\n");
+    // printf("Test2: create file sucess\n");
+    // assert(tfsCreate("b", RW, READ) == 0);
+    // printf("Sucess2\n");
 
-    printf("Test: delete file success\n");
-    assert(tfsDelete("a") == 0);
-    printf("Sucesso4\n");
+    // printf("Test3: create file sucess\n");
+    // assert(tfsCreate("c", RW, READ) == 0);
+    // printf("Sucess3\n");
 
-    printf("Test: delete file that does not exist\n");
-    assert(tfsDelete("d") == TECNICOFS_ERROR_FILE_NOT_FOUND);
+    // printf("Test: delete file success\n");
+    // assert(tfsDelete("a") == 0);
+    // printf("Sucesso4\n");
+
+    // printf("Test: delete file that does not exist\n");
+    // assert(tfsDelete("d") == TECNICOFS_ERROR_FILE_NOT_FOUND);
     
     puts("acabou o teste");
     assert(tfsUnmount() == 0);

@@ -110,7 +110,7 @@ int lookup(tecnicofs* fs, char *name, int hashIdx){
 
 /* Funcao de rename de um ficheiro */
 
-void renameFile(tecnicofs* fs, char* actualName, char* newName, int hashIdxName, int numBuckets, uid_t uid) {
+int renameFile(tecnicofs* fs, char* actualName, char* newName, int hashIdxName, int numBuckets, uid_t uid) {
 	sync_wrlock(&(fs->bstLock[hashIdxName]));
 
 	int hashIdxNewName = hash(newName, numBuckets);		// valor de hash do novo nome
@@ -125,6 +125,8 @@ void renameFile(tecnicofs* fs, char* actualName, char* newName, int hashIdxName,
 		fs->bstRoot[hashIdxNewName] = insert(fs->bstRoot[hashIdxNewName], newName, iNumber);	// substitui pelo novo
 	}
 	sync_unlock(&(fs->bstLock[hashIdxName]));
+
+	return 0;
 }
 
 

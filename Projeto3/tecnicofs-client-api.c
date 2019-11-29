@@ -48,7 +48,9 @@ int tfsRename(char *filenameOld, char *filenameNew) {
 
     write(sockfd, str, sizeof(char)*(strlen(str)+1));
     read(sockfd, &buffer, sizeof(int));
-    return 0;
+    if(buffer == TECNICOFS_ERROR_FILE_NOT_FOUND) return TECNICOFS_ERROR_FILE_NOT_FOUND;
+    else if (buffer == TECNICOFS_ERROR_FILE_ALREADY_EXISTS) return TECNICOFS_ERROR_FILE_ALREADY_EXISTS;
+    else return 0;
 }
 
 

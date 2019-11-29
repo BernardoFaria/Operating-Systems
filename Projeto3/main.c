@@ -18,6 +18,7 @@
 #include "sync.h"
 #include <signal.h>
 #include "lib/inodes.h"
+#include "tecnicofs-client-api.h"
 
 
 typedef struct threadArgs {
@@ -37,9 +38,11 @@ typedef struct openFilesTable {
 char* global_inputFile = NULL;
 char* global_outputFile = NULL;
 
-int numBuckets;
+pthread_t tid[MAXTHREADS];
+
 char* nomesocket;
-int sockfd, socketclient;
+int sockfd, socketclient, numBuckets;
+int current_thread = 0;
 
 pthread_mutex_t commandsLock;
 tecnicofs* fs;
@@ -75,15 +78,15 @@ FILE * openOutputFile() {
 }
 
 
-// void trataCtrlC(int s) {
-//   char c;
-//   printf("Queres mesmo terminar?\n");
-//   c = getc(stdin);
-//   if (c=='s')
-//     exit(EXIT_SUCCESS);
-//   else
-//     signal(SIGINT, trataCtrlC);
-// }
+void trataCtrlC(int s) {
+    for(int i = 0; i < current_thread; i++) {
+        if(pthread_join(tid[i], NULL))
+            exit(1);
+        tfsUnmount();
+    }
+    close(sockfd);
+    exit(EXIT_SUCCESS);
+}
 
 
 
@@ -103,7 +106,7 @@ void* applyCommands(void *arg){
         mutex_lock(&commandsLock);
 
         char token, arg1[MAX_INPUT_SIZE], arg4[MAX_INPUT_SIZE];                     
-        int res, arg2, arg3, lookRes; 
+        int res, arg2, arg3, lookRes, lookRes2; 
 
         int hashIdx = hash(arg1, numBuckets);   
         // char *content = NULL;                            // return da funcao se devolver string
@@ -113,11 +116,11 @@ void* applyCommands(void *arg){
         if(n == 0){
             return NULL;
         }
-        sscanf(buffer, "%c", &token);    // adicionado
+        sscanf(buffer, "%c", &token);    
 
         switch (token) {
             case 'c':
-                sscanf(buffer, "%c %s %d", &token, arg1, &arg2);    // adicionado
+                sscanf(buffer, "%c %s %d", &token, arg1, &arg2);    
                 mutex_unlock(&commandsLock);
                 lookRes = lookup(fs, arg1, hashIdx);                // devolve inumber se existir ficheiro
 
@@ -143,6 +146,21 @@ void* applyCommands(void *arg){
                 }
                 else res = delete(fs, arg1, hashIdx, lookRes, uid);  // se existir, apaga
                 break;
+            case 'r':
+                sscanf(buffer, "%c %s %s", &token, arg1, arg4);    // adicionado
+                mutex_unlock(&commandsLock);
+
+                lookRes = lookup(fs, arg1, hashIdx);
+                lookRes2 = lookup(fs, arg4, hashIdx);
+
+                if(lookRes == -1) {
+                    res = TECNICOFS_ERROR_FILE_NOT_FOUND;
+                }
+                else if (lookRes2 != -1) {
+                    res = TECNICOFS_ERROR_FILE_ALREADY_EXISTS;
+                }
+                else res = renameFile(fs, arg1, arg4, hashIdx, numBuckets, uid);
+                break;
             case 'l':
                 mutex_unlock(&commandsLock);
                 // int searchResult = lookup(fs, arg1, hashIdx);          // novo argumento
@@ -150,19 +168,6 @@ void* applyCommands(void *arg){
                 //     printf("%s not found\n", arg1);
                 // else
                 //     printf("%s found with inumber %d\n", arg1, searchResult);
-                break;
-            case 'r':
-                sscanf(buffer, "%c %s %s", &token, arg1, arg4);    // adicionado
-                mutex_unlock(&commandsLock);
-                // if(!(lookup(fs, arg1, hashIdx))) {
-                //     res = TECNICOFS_ERROR_FILE_NOT_FOUND;
-                // }
-                // else if (lookup(fs, arg4, hashIdx)) {
-                //     res = TECNICOFS_ERROR_FILE_ALREADY_EXISTS;
-                // }
-                // else {
-                //     res = renameFile(fs, arg1, arg4, hashIdx, numBuckets, uid);
-                // }
                 break;
             case 'o':
                 mutex_unlock(&commandsLock);
@@ -197,9 +202,13 @@ int main(int argc, char* argv[]) {
     parseArgs(argc, argv);
 
     /* Estruturas e variáveis */
-    int servlen, i;
+    int servlen;
     struct sockaddr_un serverAddress; 
     struct ucred credentials;
+
+
+    /* Verifica se ocorreu ctrl+c */
+    signal(SIGINT, trataCtrlC);
 
 
     /* nome do socket */
@@ -244,9 +253,6 @@ int main(int argc, char* argv[]) {
             perror("Erro ao criar ligacao - accept");
         }
 
-        /* Verifica se ocorreu ctrl+c */
-        // signal(SIGINT, trataCtrlC);
-
         /* saber qual o cliente a fazer a conecao */
         socklen_t len = sizeof(struct ucred);   
         if(getsockopt(socketclient, SOL_SOCKET, SO_PEERCRED, &credentials, &len) == -1) { // queremos o user id (UID)
@@ -259,8 +265,7 @@ int main(int argc, char* argv[]) {
         Allen->clientSockete = socketclient;
 
         /* Criacao das threads */
-        pthread_t tid[MAXTHREADS];
-        if(pthread_create(&tid[i++], NULL, applyCommands, (void *)Allen) != 0 ) {
+        if(pthread_create(&tid[current_thread++], NULL, applyCommands, (void *)Allen) != 0 ) {
            printf("Failed to create thread\n");
         }
 
