@@ -65,23 +65,28 @@ int create(tecnicofs* fs, char *name, int hashIdx, uid_t owner, permission owner
 
 
 
-int delete(tecnicofs* fs, char *name, int hashIdx, uid_t uid){
+int delete(tecnicofs* fs, char *name, int hashIdx, int inumberLook, uid_t uid){
 	sync_wrlock(&(fs->bstLock[hashIdx]));
 
 	int res;
-	int uidOwner = inode_get(hashIdx, ownerUID, NULL, NULL, NULL, 0);
-	
-	if(uid != uidOwner) {
-		res = TECNICOFS_ERROR_OTHER;
-		sync_unlock(&(fs->bstLock[hashIdx]));
-	}
+	// printf("hashIdc: %d\n", hashIdx);
+	// printf("inumberLook: %d\n", inumberLook);
+	// inode_get(inumberLook, ownerUID, NULL, NULL, NULL, 0);
+	// int uidOwner = 
 
-	else {
+	// printf("uid: %d    owner: %c\n", (int)uid, (int)ownerUID);
+	
+	// if((long)uid != (long)ownerUID) {
+	// 	res = TECNICOFS_ERROR_OTHER;
+	// 	sync_unlock(&(fs->bstLock[hashIdx]));
+	// }
+
+	// else {
 		fs->bstRoot[hashIdx] = remove_item(fs->bstRoot[hashIdx], name);
-		res = inode_delete(hashIdx);
+		res = inode_delete(inumberLook);
 		if(res != 0) res = TECNICOFS_ERROR_OTHER;
 		sync_unlock(&(fs->bstLock[hashIdx]));
-	}
+	// }
 	return res;
 }
 

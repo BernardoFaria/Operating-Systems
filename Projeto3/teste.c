@@ -33,11 +33,13 @@ int tfsCreate(char *filename, permission ownerPermissions, permission othersPerm
 int tfsDelete(char *filename) {
 
     char str[MAXLEN];
-    sprintf(str, "d %s", filename);
+    sprintf(str, "d %s%c", filename, '\0');
 
-    write(sockfd, str, sizeof(char)*strlen(str));
+    write(sockfd, str, sizeof(char)*(strlen(str)+1));
     read(sockfd, &buffer, sizeof(int));
-    return 0;
+    if(buffer == TECNICOFS_ERROR_FILE_NOT_FOUND) return TECNICOFS_ERROR_FILE_NOT_FOUND;
+    else if(buffer == TECNICOFS_ERROR_OTHER) return TECNICOFS_ERROR_OTHER;
+    else return 0;
 }
 
 
@@ -47,9 +49,9 @@ int tfsDelete(char *filename) {
 int tfsRename(char *filenameOld, char *filenameNew) {
     
     char str[MAXLEN];
-    sprintf(str, "r %s %s", filenameOld,filenameNew);
+    sprintf(str, "r %s %s%c", filenameOld,filenameNew, '\0');
 
-    write(sockfd, str, sizeof(char)*strlen(str));
+    write(sockfd, str, sizeof(char)*(strlen(str)+1));
     read(sockfd, &buffer, sizeof(int));
     return 0;
 }
@@ -60,9 +62,9 @@ int tfsRename(char *filenameOld, char *filenameNew) {
 int tfsOpen(char *filename, permission mode) {
 
     char str[MAXLEN];
-    sprintf(str, "o %s %d", filename, mode);
+    sprintf(str, "o %s %d%c", filename, mode, '\0');
 
-    write(sockfd, str, sizeof(char)*strlen(str));
+    write(sockfd, str, sizeof(char)*(strlen(str)+1));
     read(sockfd, &buffer, sizeof(int));
     return 0;
 }
@@ -72,9 +74,9 @@ int tfsOpen(char *filename, permission mode) {
 int tfsClose(int fd) {
     
     char str[MAXLEN];
-    sprintf(str, "x %d", fd);
+    sprintf(str, "x %d%c", fd, '\0');
 
-    write(sockfd, str, sizeof(char)*strlen(str));
+    write(sockfd, str, sizeof(char)*(strlen(str)+1));
     read(sockfd, &buffer, sizeof(int));
     return 0;
 }
@@ -85,9 +87,9 @@ int tfsClose(int fd) {
 int tfsRead(int fd, char *buffer, int len) {
     
     char str[MAXLEN];
-    sprintf(str, "l %d %d", fd, len);
+    sprintf(str, "l %d %d%c", fd, len, '\0');
 
-    write(sockfd, str, sizeof(char)*strlen(str));
+    write(sockfd, str, sizeof(char)*(strlen(str)+1));
     read(sockfd, &buffer, sizeof(int));
     return 0;
 }
@@ -98,9 +100,9 @@ int tfsRead(int fd, char *buffer, int len) {
 int tfsWrite(int fd, char *buffer, int len) {
 
     char str[MAXLEN];
-    sprintf(str, "w %d %s", fd, buffer);
+    sprintf(str, "w %d %s%c", fd, buffer, '\0');
 
-    write(sockfd, str, sizeof(char)*strlen(str));
+    write(sockfd, str, sizeof(char)*(strlen(str)+1));
     read(sockfd, &buffer, sizeof(int));
     return 0;
 }
@@ -158,16 +160,21 @@ int main(int argc, char** argv) {
     assert(tfsCreate("c", RW, READ) == 0);
     printf("Sucess3\n");
 
-    // printf("Test: delete file success\n");
-    // assert(tfsDelete("a") == 0);
-    // printf("Sucesso3\n");
+    printf("Test: delete file success\n");
+    assert(tfsDelete("a") == 0);
+    printf("Sucesso4\n");
+
+    printf("Test: delete file that does not exist\n");
+    assert(tfsDelete("d") == TECNICOFS_ERROR_FILE_NOT_FOUND);
+    
+    puts("acabou o teste");
+    assert(tfsUnmount() == 0);
 
     // printf("Test: delete non existing file success\n");
     // assert(tfsDelete("fabio") == -5);
     // printf("Sucesso4\n");
 
-    assert(tfsUnmount() == 0);
-
+    // assert(tfsUnmount() == 0);
     return 0;
 }
 

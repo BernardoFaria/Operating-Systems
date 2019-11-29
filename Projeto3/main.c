@@ -111,35 +111,37 @@ void* applyCommands(void *arg){
         /* Lê do cliente */
         int n = read(socketclient, buffer, MAXBUFFERSIZE);
         if(n == 0){
-            // puts("Unmount");
             return NULL;
         }
         sscanf(buffer, "%c", &token);    // adicionado
-        // printf("%s\n", buffer);
 
         switch (token) {
             case 'c':
                 sscanf(buffer, "%c %s %d", &token, arg1, &arg2);    // adicionado
                 mutex_unlock(&commandsLock);
-                lookRes = lookup(fs, arg1, hashIdx);
+                lookRes = lookup(fs, arg1, hashIdx);                // devolve inumber se existir ficheiro
 
-                int ownerPer = arg2/10;
-                int otherPerm = arg2 - (arg2 / 10) * 10;
+                int ownerPer = arg2/10;                             // ownerPermission
+                int otherPerm = arg2 - (arg2 / 10) * 10;            // othersPermission
 
-                if(lookRes == -1) { 
-                    res = create(fs, arg1, hashIdx, uid, ownerPer, otherPerm);      // cria o novo ficheiro
+                if(lookRes == -1) {                                 // se nao existir, cria
+                    res = create(fs, arg1, hashIdx, uid, ownerPer, otherPerm);      
                 }
-                else res = TECNICOFS_ERROR_FILE_ALREADY_EXISTS;      
+                else res = TECNICOFS_ERROR_FILE_ALREADY_EXISTS;     // se existir, da erro
                 break;
             case 'd':
+                /*
+                *   falta verifcar se uid = owner !!!!!!!!!!!!!!!!!!!!!!
+                */
                 sscanf(buffer, "%c %s", &token, arg1);
                 mutex_unlock(&commandsLock);
-                /* o lookup devolve o INUMBER!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*/
+
                 lookRes = lookup(fs, arg1, hashIdx);
-                if(!lookRes) {                            // se o ficheiro nao exister, da erro
+
+                if(lookRes == -1) {                                  // se o ficheiro nao existir, da erro
                     res = TECNICOFS_ERROR_FILE_NOT_FOUND;
                 }
-                else res = delete(fs, arg1, lookRes, uid);
+                else res = delete(fs, arg1, hashIdx, lookRes, uid);  // se existir, apaga
                 break;
             case 'l':
                 mutex_unlock(&commandsLock);
@@ -183,6 +185,7 @@ void* applyCommands(void *arg){
     // if(content) write(socketclient, content, sizeof(char)*res);
 
     }  
+    puts("sai do apply");
     return NULL;
 }
 
