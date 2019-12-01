@@ -96,20 +96,36 @@ void trataCtrlC(int s) {
 
 
 
-/**************************************
- *     Funcao searchOF (Open File)    *
- *   Procura se determinado ficheiro  *
- *          está na tabela            *
- *************************************/
+/****************************************************
+ *                 Funcao searchOFT                 *
+ *   Procura se determinado ficheiro está na tabela *
+ ****************************************************/
 
-// bool searchOF(int fd, struct openFilesTable **table) {
-//     for(int i = 0; i < MAXOPENFILES; i++) {
-//         if(table[i]->fd == fd) {
-//             return true;
-//         }
-//     }
-//     return false;
-// }
+bool searchOFT(int fd, struct openFilesTable **table) {
+    for(int i = 0; i < MAXOPENFILES; i++) {
+        if(table[i]->inumber == fd) {
+            return true;
+        }
+    }
+    return false;
+}
+
+
+/*******************************************************
+ *                 Funcao deleteFromOFT                *
+ *   Remove um ficheiro da tabela de ficheiros abertos *
+ *******************************************************/
+
+int deleteFromOFT(int fd, struct openFilesTable **table) {
+    for(int i = 0; i < MAXOPENFILES; i++) {
+        if(table[i]->inumber == fd) {
+            table[i]->inumber = -1;
+            table[i]->mode = NONE;
+            return 0;
+        }
+    }
+    return -1;
+}
 
 
 /*************************************************
@@ -203,6 +219,9 @@ void* applyCommands(void *arg){
                 if(lookRes == -1) {                                  // se o ficheiro nao existir, da erro
                     res = TECNICOFS_ERROR_FILE_NOT_FOUND;
                 }
+                else if(searchOFT(lookRes, oPT) == true) {          // CASO O FICHEIRO ESTEJA ABERTO
+                    res = TECNICOFS_ERROR_FILE_IS_OPEN;
+                }
                 else res = delete(fs, arg1, hashIdx, lookRes, uid);  // se existir, apaga
                 break;
             case 'r':                                               // RENAME
@@ -241,7 +260,6 @@ void* applyCommands(void *arg){
                         count++;
                     }
                 }
-                printf("COunt:%d\n", count);
                 break;
             case 'x':                                               // CLOSE
                 /****************************************
@@ -249,12 +267,13 @@ void* applyCommands(void *arg){
                 ****************************************/
                 sscanf(buffer, "%c %d", &token, &arg2);             // x fd
                 mutex_unlock(&commandsLock);
-                // if (searchOF(arg2, oPT) == false) {
-                //     res = TECNICOFS_ERROR_FILE_NOT_OPEN;
-                // }
-                // else {
-                //     res = closeFile(arg2);
-                // }
+                if (searchOFT(arg2, oPT) == false) {
+                    res = TECNICOFS_ERROR_FILE_NOT_OPEN;
+                }
+                else {
+                    res = deleteFromOFT(arg2, oPT);
+                    if(res == -1) res = TECNICOFS_ERROR_OTHER;
+                }
                 break;
             case 'l':                                               // READ
                 /****************************************

@@ -173,13 +173,6 @@ int openFile(char *filename, int perm, uid_t uid, int inumber) {
 }
 
 
-int closeFile(int fd) {
-	int res;
-	if(close(fd) == 0) return res = 0;
-	else return res = TECNICOFS_ERROR_OTHER;
-}
-
-
 int readFile(int inumber, permission mode, int bufferLen, char* buffer) {
 
 	int res;

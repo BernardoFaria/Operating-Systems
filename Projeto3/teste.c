@@ -41,6 +41,7 @@ int tfsDelete(char *filename) {
     read(sockfd, &buffer, sizeof(int));
     if(buffer == TECNICOFS_ERROR_FILE_NOT_FOUND) return TECNICOFS_ERROR_FILE_NOT_FOUND;
     else if(buffer == TECNICOFS_ERROR_OTHER) return TECNICOFS_ERROR_OTHER;
+    else if(buffer == TECNICOFS_ERROR_FILE_IS_OPEN) return TECNICOFS_ERROR_FILE_IS_OPEN;
     else return 0;
 }
 
@@ -169,61 +170,24 @@ int main(int argc, char** argv) {
     }
 
     int fd = -1;
+
     assert(tfsMount(argv[1]) == 0);
+    printf("Test Mount: Done\n");
 
-    assert(tfsCreate("abc", RW, READ) == 0 );
-    assert(tfsCreate("roma", WRITE, WRITE) == 0 );
+    assert(tfsCreate("a", RW, READ) == 0);
+    printf("Test Create: done\n");
 
-    // assert(tfsRename("abc", "bcd") == 0);
+    assert((fd = tfsOpen("a", RW)) == 0);
+    printf("Test Open: Done\n");
 
-    assert((fd = tfsOpen("abc", RW)) == 0);
-    assert((fd = tfsOpen("roma", READ)) == TECNICOFS_ERROR_PERMISSION_DENIED);
+    assert(tfsDelete("a") == TECNICOFS_ERROR_FILE_IS_OPEN);
+    printf("Test Delete open file: done\n");
 
-    // assert(tfsDelete("bcd") == 0);  
-
-    
-    // assert(tfsMount(argv[1]) == 0);
-
-    // printf("Test: create file sucess\n");
-    // assert(tfsCreate("a", RW, READ) == 0);
-    // printf("Sucesso\n");
-
-    // printf("Test: rename file name\n");
-    // assert(tfsRename("a", "bcd") == 0);
-    // printf("Sucesso\n");
-
-    // printf("Test: open file sucess\n");
-    // assert((fd = tfsOpen("a", RW)) == 0 );
-    // printf("Sucesso\n");
-
-    // printf("Test2: create file sucess\n");
-    // assert(tfsCreate("b", RW, READ) == 0);
-    // printf("Sucess2\n");
-
-    // printf("Test3: create file sucess\n");
-    // assert(tfsCreate("c", RW, READ) == 0);
-    // printf("Sucess3\n");
-
-    // printf("Test: delete file success\n");
-    // assert(tfsDelete("a") == TECNICOFS_ERROR_FILE_NOT_FOUND);
-    // printf("Sucesso4\n");
-
-    // printf("Test: delete file success\n");
-    // assert(tfsDelete("a") == 0);
-    // printf("Sucesso4\n");
-
-    // printf("Test: delete file that does not exist\n");
-    // assert(tfsDelete("d") == TECNICOFS_ERROR_FILE_NOT_FOUND);
-    // printf("Sucesso");
+    assert((fd = tfsClose(0)) == 0);
+    printf("Test Close: Done\n");
     
     puts("acabou o teste");
     assert(tfsUnmount() == 0);
-
-    // printf("Test: delete non existing file success\n");
-    // assert(tfsDelete("fabio") == -5);
-    // printf("Sucesso4\n");
-
-    // assert(tfsUnmount() == 0);
     return 0;
 }
 
