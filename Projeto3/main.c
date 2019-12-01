@@ -127,6 +127,19 @@ int deleteFromOFT(int fd, struct openFilesTable **table) {
     return -1;
 }
 
+/*************************************************
+ *               Funcao giveMode                 *
+ *  Dado um fd, retorna o modo correspondente    *
+ *************************************************/
+
+permission giveMode(int fd, struct openFilesTable **table) {
+    for(int i = 0; i < MAXOPENFILES; i++) {
+        if(table[i]->inumber == fd) {
+            return table[i]->mode;
+        }
+    }
+    return NONE;
+}
 
 /*************************************************
  *               Funcao giveInumber              *
@@ -143,19 +156,6 @@ int deleteFromOFT(int fd, struct openFilesTable **table) {
 // }
 
 
-/*************************************************
- *               Funcao giveMode                 *
- *  Dado um fd, retorna o modo correspondente    *
- *************************************************/
-
-// permission giveMode(int fd, struct openFilesTable **table) {
-//     for(int i = 0; i < MAXOPENFILES; i++) {
-//         if(table[i]->fd == fd) {
-//             return table[i]->mode;
-//         }
-//     }
-//     return 0;  // erro
-// }
 
 
 
@@ -173,7 +173,8 @@ void* applyCommands(void *arg){
     oPT = (struct openFilesTable**) malloc(sizeof(struct openFilesTable**) * MAXOPENFILES);
     for(int i = 0; i < MAXOPENFILES; i++) {
         oPT[i] = malloc(sizeof(openFilesTable));
-        oPT[i] = malloc(sizeof(openFilesTable));
+        oPT[i]->inumber = -1;
+        oPT[i]->mode = NONE;
     }
 
 
@@ -227,7 +228,6 @@ void* applyCommands(void *arg){
             case 'r':                                               // RENAME
                 sscanf(buffer, "%c %s %s", &token, arg1, arg4);     // r filenameOld filenameNew
                 mutex_unlock(&commandsLock);
-
                 lookRes = lookup(fs, arg1, hashIdx);
                 lookRes2 = lookup(fs, arg4, hashIdx);
 
@@ -265,9 +265,6 @@ void* applyCommands(void *arg){
                 }
                 break;
             case 'x':                                               // CLOSE
-                /****************************************
-                * TESTAR DEPOIS DE ESTAR FEITO O "OPEN" *
-                ****************************************/
                 sscanf(buffer, "%c %d", &token, &arg2);             // x fd
                 mutex_unlock(&commandsLock);
                 if (searchOFT(arg2, oPT) == false) {
@@ -279,34 +276,31 @@ void* applyCommands(void *arg){
                 }
                 break;
             case 'l':                                               // READ
-                /****************************************
-                * TESTAR DEPOIS DE ESTAR FEITO O "OPEN" *
-                ****************************************/
                 sscanf(buffer, "%c %d %d", &token, &arg2, &arg3);   // l fd len
                 mutex_unlock(&commandsLock);
-                // if (searchOF(arg2, oPT) == false) {
-                //     res = TECNICOFS_ERROR_FILE_NOT_OPEN;
-                // }
-                // else {
-                //     int inumber = giveInumber(arg2, oPT);
-                //     permission mode = giveMode(arg2, oPT);
-                //     res = readFile(inumber, mode, arg3, content);
-                // }
+                if (searchOFT(arg2, oPT) == false) {
+                    res = TECNICOFS_ERROR_FILE_NOT_OPEN;
+                }
+                else if(giveMode(arg2, oPT) < 2) {
+                    res = TECNICOFS_ERROR_INVALID_MODE;
+                }
+                else {
+                    res = readFile(arg2, arg3, content);
+                    if(res == -1) res = TECNICOFS_ERROR_OTHER;
+                }
                 break;
             case 'w':                                               // WRITE
-                /****************************************
-                * TESTAR DEPOIS DE ESTAR FEITO O "OPEN" *
-                ****************************************/
                 sscanf(buffer, "%c %d %s", &token, &arg2, arg1);   // w fd dataInBuffer
                 mutex_unlock(&commandsLock);
-                // if (searchOF(arg2, oPT) == false) {
-                //     res = TECNICOFS_ERROR_FILE_NOT_OPEN;
-                // }
-                // else {
-                //     int inumber = giveInumber(arg2, oPT);
-                //     permission mode = giveMode(arg2, oPT);
-                //     res = writeFile(inumber, mode, arg1);
-                // }
+                if (searchOFT(arg2, oPT) == false) {
+                    res = TECNICOFS_ERROR_FILE_NOT_OPEN;
+                }
+                else if(giveMode(arg2, oPT) != 1 || giveMode(arg2, oPT) != 3) {
+                    res = TECNICOFS_ERROR_INVALID_MODE;
+                }
+                else {
+                    res = writeFile(arg2, arg1);
+                }
                 break;
             default: { /* error */
                 mutex_unlock(&commandsLock);
@@ -317,7 +311,7 @@ void* applyCommands(void *arg){
     if(write(socketclient, &res, sizeof(int)) < 0) {
         perror("Falhou no write");
     }
-    if(content) write(socketclient, content, sizeof(char)*res);         // para ler o conteudo no READ
+    // if(content) write(socketclient, content, sizeof(char)*res);         // para ler o conteudo no READ
 
     }
     puts("sai do apply");

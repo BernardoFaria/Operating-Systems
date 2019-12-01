@@ -22,8 +22,8 @@ int lookup(tecnicofs* fs, char *name, int hashValue);                           
 int renameFile(tecnicofs* fs, char* actualName, char* newName, int hashIdxName, int numBuckets, uid_t uid, int inumberOld);     // void ->int
 permission getPerm(int perm);                                                                                                   // new function
 int openFile(char *filename, int perm, uid_t uid, int inumber);                                                                 // new function
-int readFile(int inumber, permission mode, int bufferLen, char* buffer);                                                        // new function
-int writeFile(int inumber, permission mode, char* dataInBuffer);                                                                // new function
+int readFile(int inumber, int bufferLen, char* buffer);                                                                         // new function
+int writeFile(int inumber, char* dataInBuffer);                                                                                 // new function
 void print_tecnicofs_tree(FILE * fp, tecnicofs *fs, int numBuckets);
 
 #endif /* FS_H */

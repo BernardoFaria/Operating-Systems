@@ -173,45 +173,34 @@ int openFile(char *filename, int perm, uid_t uid, int inumber) {
 }
 
 
-int readFile(int inumber, permission mode, int bufferLen, char* buffer) {
+int readFile(int inumber, int bufferLen, char* buffer) {
 
 	int res;
 
-	ownerPermissions = (permission *) malloc(sizeof(permission*));
-	othersPermissions = (permission *) malloc(sizeof(permission*));
 	content = (char *) malloc(sizeof(char*));
+	// lenContent = (long int) malloc(sizeof(long int));
+	inode_get(inumber, NULL, NULL, NULL, content, 0);
 
-	inode_get(inumber, NULL, ownerPermissions, othersPermissions, content, 0);
+	strncpy(buffer, content, bufferLen);
+	// res = read(inumber, buffer, bufferLen);
+	res = strlen(buffer);
 
-	if ((long)ownerPermissions < 2 || (long)othersPermissions < 2) {
-		return res = TECNICOFS_ERROR_INVALID_MODE;
+	if(res < 0) {
+		res = TECNICOFS_ERROR_OTHER;
 	}
 
-	else {
-		strncpy(buffer, content, bufferLen-1);			// -1 para nao ler o '\0'     ??????????????????
-		// buffer[bufferLen] = '\0';
-		return res = strlen(buffer);
-	}
+	return res;
+
 }
 
 
 
-int writeFile(int inumber, permission mode, char* dataInBuffer) {
+int writeFile(int inumber, char* dataInBuffer) {
 
 	int res;
 
-	ownerPermissions = (permission *) malloc(sizeof(permission*));
-	othersPermissions = (permission *) malloc(sizeof(permission*));
-	content = (char *) malloc(sizeof(char*));
-
-	inode_get(inumber, NULL, ownerPermissions, othersPermissions, content, 0);
-
-	if ((long)ownerPermissions < 2 || (long)othersPermissions < 2) {
-		return res = TECNICOFS_ERROR_INVALID_MODE;
-	}
-
-	if(inode_set(inumber, dataInBuffer, strlen(dataInBuffer)) == 0) return res = 0;
-	else return TECNICOFS_ERROR_OTHER;
+	if(inode_set(inumber, dataInBuffer, strlen(dataInBuffer)) == -1) return res = TECNICOFS_ERROR_OTHER;
+	else return res = 0;
 	
 }
 
