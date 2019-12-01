@@ -5,6 +5,8 @@
 #include <sys/types.h>          
 #include <sys/socket.h>
 #include <assert.h>
+#include <fcntl.h>
+
 
 #define MAXLEN 140
 
@@ -69,7 +71,10 @@ int tfsOpen(char *filename, permission mode) {
 
     write(sockfd, str, sizeof(char)*(strlen(str)+1));
     read(sockfd, &buffer, sizeof(int));
-    return 0;
+    if (buffer == TECNICOFS_ERROR_FILE_NOT_FOUND) return TECNICOFS_ERROR_FILE_NOT_FOUND;
+    else if (buffer == TECNICOFS_ERROR_MAXED_OPEN_FILES) return TECNICOFS_ERROR_MAXED_OPEN_FILES;
+    else if (buffer == TECNICOFS_ERROR_PERMISSION_DENIED) return TECNICOFS_ERROR_PERMISSION_DENIED;
+    else return 0;
 }
 
 
@@ -81,34 +86,47 @@ int tfsClose(int fd) {
 
     write(sockfd, str, sizeof(char)*(strlen(str)+1));
     read(sockfd, &buffer, sizeof(int));
-    return 0;
+    if (buffer == TECNICOFS_ERROR_FILE_NOT_OPEN) return TECNICOFS_ERROR_FILE_NOT_OPEN;
+    else if (buffer == TECNICOFS_ERROR_OTHER) return TECNICOFS_ERROR_OTHER;
+    else return 0;
 }
 
 
 
 
-int tfsRead(int fd, char *buffer, int len) {
+// int tfsRead(int fd, char *buffer, int len) {
     
-    char str[MAXLEN];
-    sprintf(str, "l %d %d%c", fd, len, '\0');
+//     char str[MAXLEN];
+//     char res[MAXLEN];
+//     sprintf(str, "l %d %d%c", fd, len, '\0');
 
-    write(sockfd, str, sizeof(char)*(strlen(str)+1));
-    read(sockfd, &buffer, sizeof(int));
-    return 0;
-}
+//     write(sockfd, str, sizeof(char)*(strlen(str)+1));
+//     read(sockfd, &buffer, sizeof(int));                 // le o número de caracteres lidos (excluindo o ‘\0’)
+//     strcpy(res, buffer);
+//     if (*buffer == TECNICOFS_ERROR_FILE_NOT_OPEN) return TECNICOFS_ERROR_FILE_NOT_OPEN;
+//     else if (*buffer == TECNICOFS_ERROR_INVALID_MODE) return TECNICOFS_ERROR_INVALID_MODE;
+//     else {
+//         read(sockfd, &buffer, (sizeof(int))*len);           // le a string recebida
+//         strcat(res, buffer);
+//         return buffer;
+//     }
+// }
 
 
 
 
-int tfsWrite(int fd, char *buffer, int len) {
+// int tfsWrite(int fd, char *buffer, int len) {
 
-    char str[MAXLEN];
-    sprintf(str, "w %d %s%c", fd, buffer, '\0');
+//     char str[MAXLEN];
+//     sprintf(str, "w %d %s%c", fd, buffer, '\0');
 
-    write(sockfd, str, sizeof(char)*(strlen(str)+1));
-    read(sockfd, &buffer, sizeof(int));
-    return 0;
-}
+//     write(sockfd, str, sizeof(char)*(strlen(str)+1));
+//     read(sockfd, &buffer, sizeof(int));
+//     if (buffer == TECNICOFS_ERROR_INVALID_MODE) return TECNICOFS_ERROR_INVALID_MODE;
+//     else if (buffer == TECNICOFS_ERROR_FILE_NOT_OPEN) return TECNICOFS_ERROR_FILE_NOT_OPEN;
+//     else if (buffer == TECNICOFS_ERROR_OTHER) return TECNICOFS_ERROR_OTHER;
+//     else return 0;
+// }
 
 
 
@@ -149,15 +167,34 @@ int main(int argc, char** argv) {
         printf("Usage: %s sock_path\n", argv[0]);
         exit(0);
     }
+
+    int fd = -1;
     assert(tfsMount(argv[1]) == 0);
 
-    printf("Test: create file sucess\n");
-    assert(tfsCreate("a", RW, READ) == 0);
-    printf("Sucesso\n");
+    assert(tfsCreate("abc", RW, READ) == 0 );
+    assert(tfsCreate("roma", WRITE, WRITE) == 0 );
 
-    printf("Test: rename file name\n");
-    assert(tfsRename("a", "bcd") == 0);
-    printf("Sucesso\n");
+    // assert(tfsRename("abc", "bcd") == 0);
+
+    assert((fd = tfsOpen("abc", RW)) == 0);
+    assert((fd = tfsOpen("roma", READ)) == TECNICOFS_ERROR_PERMISSION_DENIED);
+
+    // assert(tfsDelete("bcd") == 0);  
+
+    
+    // assert(tfsMount(argv[1]) == 0);
+
+    // printf("Test: create file sucess\n");
+    // assert(tfsCreate("a", RW, READ) == 0);
+    // printf("Sucesso\n");
+
+    // printf("Test: rename file name\n");
+    // assert(tfsRename("a", "bcd") == 0);
+    // printf("Sucesso\n");
+
+    // printf("Test: open file sucess\n");
+    // assert((fd = tfsOpen("a", RW)) == 0 );
+    // printf("Sucesso\n");
 
     // printf("Test2: create file sucess\n");
     // assert(tfsCreate("b", RW, READ) == 0);
@@ -167,9 +204,9 @@ int main(int argc, char** argv) {
     // assert(tfsCreate("c", RW, READ) == 0);
     // printf("Sucess3\n");
 
-    printf("Test: delete file success\n");
-    assert(tfsDelete("a") == TECNICOFS_ERROR_FILE_NOT_FOUND);
-    printf("Sucesso4\n");
+    // printf("Test: delete file success\n");
+    // assert(tfsDelete("a") == TECNICOFS_ERROR_FILE_NOT_FOUND);
+    // printf("Sucesso4\n");
 
     // printf("Test: delete file success\n");
     // assert(tfsDelete("a") == 0);

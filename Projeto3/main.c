@@ -3,6 +3,7 @@
 #define _GNU_SOURCE
 #define MAXTHREADS 100
 #define MAXBUFFERSIZE 140
+#define MAXOPENFILES 5
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,6 +20,7 @@
 #include <signal.h>
 #include "lib/inodes.h"
 #include "tecnicofs-client-api.h"
+#include <stdbool.h> 
 
 
 typedef struct threadArgs {
@@ -78,6 +80,10 @@ FILE * openOutputFile() {
 }
 
 
+/**************************************
+ *          Funcao trataCtrlc         *
+ *************************************/
+
 void trataCtrlC(int s) {
     for(int i = 0; i < current_thread; i++) {
         if(pthread_join(tid[i], NULL))
@@ -90,15 +96,71 @@ void trataCtrlC(int s) {
 
 
 
+/**************************************
+ *     Funcao searchOF (Open File)    *
+ *   Procura se determinado ficheiro  *
+ *          está na tabela            *
+ *************************************/
+
+// bool searchOF(int fd, struct openFilesTable **table) {
+//     for(int i = 0; i < MAXOPENFILES; i++) {
+//         if(table[i]->fd == fd) {
+//             return true;
+//         }
+//     }
+//     return false;
+// }
+
+
+/*************************************************
+ *               Funcao giveInumber              *
+ *  Dado um fd, retorna o inumber correspondente *
+ *************************************************/
+
+// int giveInumber(int fd, struct openFilesTable **table) {
+//     for(int i = 0; i < MAXOPENFILES; i++) {
+//         if(table[i]->fd == fd) {
+//             return table[i]->inumber;
+//         }
+//     }
+//     return -1;  // erro
+// }
+
+
+/*************************************************
+ *               Funcao giveMode                 *
+ *  Dado um fd, retorna o modo correspondente    *
+ *************************************************/
+
+// permission giveMode(int fd, struct openFilesTable **table) {
+//     for(int i = 0; i < MAXOPENFILES; i++) {
+//         if(table[i]->fd == fd) {
+//             return table[i]->mode;
+//         }
+//     }
+//     return 0;  // erro
+// }
+
+
+
+
 void* applyCommands(void *arg){
 
     char buffer[MAXBUFFERSIZE];
+    int count = 0;
     uid_t uid = ((struct threadArgs*)arg)->uid;
     // int sockete = ((struct threadArgs*)arg)->clientSockete;
 
+
     /* tabela de ficheiros abertos */
-    /* SO NO "OPEN" E NO "CLOSE" */
-    // struct openFilesTable oPT[5];
+    openFilesTable **oPT;
+    oPT = (struct openFilesTable**) malloc(sizeof(struct openFilesTable**) * MAXOPENFILES);
+    for(int i = 0; i < MAXOPENFILES; i++) {
+        oPT[i] = malloc(sizeof(openFilesTable));
+        oPT[i] = malloc(sizeof(openFilesTable));
+    }
+
+
 
 
     while(1){
@@ -106,10 +168,10 @@ void* applyCommands(void *arg){
         mutex_lock(&commandsLock);
 
         char token, arg1[MAX_INPUT_SIZE], arg4[MAX_INPUT_SIZE];                     
-        int res, arg2, lookRes, lookRes2; 
+        int res, arg2, arg3, lookRes, lookRes2; 
 
         int hashIdx = hash(arg1, numBuckets);   
-        // char *content = NULL;                            // return da funcao se devolver string
+        char *content = NULL;                            // usado no comando READ
 
         /* Lê do cliente */
         int n = read(socketclient, buffer, MAXBUFFERSIZE);
@@ -119,21 +181,21 @@ void* applyCommands(void *arg){
         sscanf(buffer, "%c", &token);    
 
         switch (token) {
-            case 'c':
-                sscanf(buffer, "%c %s %d", &token, arg1, &arg2);    
+            case 'c':                                               // CREATE
+                sscanf(buffer, "%c %s %d", &token, arg1, &arg2);    // c filename permissions
                 mutex_unlock(&commandsLock);
                 lookRes = lookup(fs, arg1, hashIdx);                // devolve inumber se existir ficheiro
 
                 int ownerPer = arg2/10;                             // ownerPermission
-                int otherPerm = arg2 - (arg2 / 10) * 10;            // othersPermission
+                int otherPerm = arg2 % 10;                          // othersPermission
 
                 if(lookRes == -1) {                                 // se nao existir, cria
                     res = create(fs, arg1, hashIdx, uid, ownerPer, otherPerm);      
                 }
                 else res = TECNICOFS_ERROR_FILE_ALREADY_EXISTS;     // se existir, da erro
                 break;
-            case 'd':
-                sscanf(buffer, "%c %s", &token, arg1);
+            case 'd':                                               // DELETE
+                sscanf(buffer, "%c %s", &token, arg1);              // d filename
                 mutex_unlock(&commandsLock);
 
                 lookRes = lookup(fs, arg1, hashIdx);
@@ -143,8 +205,8 @@ void* applyCommands(void *arg){
                 }
                 else res = delete(fs, arg1, hashIdx, lookRes, uid);  // se existir, apaga
                 break;
-            case 'r':
-                sscanf(buffer, "%c %s %s", &token, arg1, arg4);    // adicionado
+            case 'r':                                               // RENAME
+                sscanf(buffer, "%c %s %s", &token, arg1, arg4);     // r filenameOld filenameNew
                 mutex_unlock(&commandsLock);
 
                 lookRes = lookup(fs, arg1, hashIdx);
@@ -158,23 +220,72 @@ void* applyCommands(void *arg){
                 }
                 else res = renameFile(fs, arg1, arg4, hashIdx, numBuckets, uid, lookRes);
                 break;
-            case 'l':
+            case 'o':                                               // OPEN
+                sscanf(buffer, "%c %s %d", &token, arg1, &arg2);    // o filename mode
                 mutex_unlock(&commandsLock);
-                // int searchResult = lookup(fs, arg1, hashIdx);          // novo argumento
-                // if(!searchResult)
-                //     printf("%s not found\n", arg1);
-                // else
-                //     printf("%s found with inumber %d\n", arg1, searchResult);
+                
+                lookRes = lookup(fs, arg1, hashIdx);
+
+                if (lookRes == -1) {
+                    res = TECNICOFS_ERROR_FILE_NOT_FOUND;
+                }
+
+                else if (count >= 5) {
+                    res = TECNICOFS_ERROR_MAXED_OPEN_FILES;
+                }
+                else {
+                    res = openFile(arg1, arg2, uid, lookRes);
+                    if (res == 0) {
+                        oPT[count]->inumber = lookRes;
+                        oPT[count]->mode = arg2;
+                        count++;
+                    }
+                }
+                printf("COunt:%d\n", count);
                 break;
-            case 'o':
+            case 'x':                                               // CLOSE
+                /****************************************
+                * TESTAR DEPOIS DE ESTAR FEITO O "OPEN" *
+                ****************************************/
+                sscanf(buffer, "%c %d", &token, &arg2);             // x fd
                 mutex_unlock(&commandsLock);
-                printf("Cheguei ao 'o'");
-            case 'x':
+                // if (searchOF(arg2, oPT) == false) {
+                //     res = TECNICOFS_ERROR_FILE_NOT_OPEN;
+                // }
+                // else {
+                //     res = closeFile(arg2);
+                // }
+                break;
+            case 'l':                                               // READ
+                /****************************************
+                * TESTAR DEPOIS DE ESTAR FEITO O "OPEN" *
+                ****************************************/
+                sscanf(buffer, "%c %d %d", &token, &arg2, &arg3);   // l fd len
                 mutex_unlock(&commandsLock);
-                printf("Cheguei ao 'x'");
-            case 'w':
+                // if (searchOF(arg2, oPT) == false) {
+                //     res = TECNICOFS_ERROR_FILE_NOT_OPEN;
+                // }
+                // else {
+                //     int inumber = giveInumber(arg2, oPT);
+                //     permission mode = giveMode(arg2, oPT);
+                //     res = readFile(inumber, mode, arg3, content);
+                // }
+                break;
+            case 'w':                                               // WRITE
+                /****************************************
+                * TESTAR DEPOIS DE ESTAR FEITO O "OPEN" *
+                ****************************************/
+                sscanf(buffer, "%c %d %s", &token, &arg2, arg1);   // w fd dataInBuffer
                 mutex_unlock(&commandsLock);
-                printf("cheguei ao 'w'");
+                // if (searchOF(arg2, oPT) == false) {
+                //     res = TECNICOFS_ERROR_FILE_NOT_OPEN;
+                // }
+                // else {
+                //     int inumber = giveInumber(arg2, oPT);
+                //     permission mode = giveMode(arg2, oPT);
+                //     res = writeFile(inumber, mode, arg1);
+                // }
+                break;
             default: { /* error */
                 mutex_unlock(&commandsLock);
                 fprintf(stderr, "Error: commands to apply\n");
@@ -184,9 +295,9 @@ void* applyCommands(void *arg){
     if(write(socketclient, &res, sizeof(int)) < 0) {
         perror("Falhou no write");
     }
-    // if(content) write(socketclient, content, sizeof(char)*res);
+    if(content) write(socketclient, content, sizeof(char)*res);         // para ler o conteudo no READ
 
-    }  
+    }
     puts("sai do apply");
     return NULL;
 }
@@ -202,6 +313,7 @@ int main(int argc, char* argv[]) {
     int servlen;
     struct sockaddr_un serverAddress; 
     struct ucred credentials;
+    TIMER_T startTime, stopTime;
 
 
     /* Verifica se ocorreu ctrl+c */
@@ -241,6 +353,9 @@ int main(int argc, char* argv[]) {
     /* Disponibilidade para esperar pedidos de ligacoes */
     listen(sockfd, 100);
 
+    /* Começa o tempo */
+    TIMER_READ(startTime);
+
     /* ciclo para aceitar pedidos */
     for(;;) {
 
@@ -268,6 +383,10 @@ int main(int argc, char* argv[]) {
 
         
     }
+
+    /* Termina o tempo */
+    TIMER_READ(stopTime);
+    printf("TecnicoFS completed in %.4f seconds.\n", TIMER_DIFF_SECONDS(startTime, stopTime));
     
     FILE * outputFp = openOutputFile();
 

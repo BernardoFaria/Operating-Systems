@@ -1,5 +1,7 @@
 /* Sistemas Operativos, DEI/IST/ULisboa 2019-20 */
 
+#define NAMEFILESZ 100
+
 #include "fs.h"
 #include "lib/bst.h"
 #include "lib/hash.h"
@@ -9,6 +11,9 @@
 #include "sync.h"
 #include "lib/inodes.h"
 #include <sys/types.h>
+#include <errno.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 
 /* Variaveis para usar o inode_get */
@@ -17,6 +22,7 @@ permission *ownerPermissions;
 permission *othersPermissions;
 char* content;
 int lenContent;
+
 
 
 int obtainNewInumber(tecnicofs* fs) {
@@ -94,7 +100,6 @@ int delete(tecnicofs* fs, char *name, int hashIdx, int inumberLook, uid_t uid){
 int lookup(tecnicofs* fs, char *name, int hashIdx){
 	sync_rdlock(&(fs->bstLock[hashIdx]));
 	int inumber = -1;
-	// int inumber = 0;
 	node* searchNode = search(fs->bstRoot[hashIdx], name);
 	if ( searchNode ) {
 		inumber = searchNode->inumber;
@@ -140,6 +145,82 @@ int renameFile(tecnicofs* fs, char* actualName, char* newName, int hashIdxName, 
 
 
 
+permission getPerm(int perm) {
+	permission p;
+	if (perm == 1) return p = WRITE;
+	else if (perm == 2) return p = READ;
+	else if (perm == 3) return p = RW;
+	else return p = NONE;
+}
+
+
+int openFile(char *filename, int perm, uid_t uid, int inumber) {
+	int res;
+	permission p = getPerm(perm);
+
+	ownerPermissions = (permission *) malloc(sizeof(permission*));
+	othersPermissions = (permission *) malloc(sizeof(permission*));
+	inode_get(inumber, NULL, ownerPermissions, othersPermissions, NULL, 0);
+
+	if(p == *ownerPermissions) {
+		return 0;
+	}
+
+	else if(p == *othersPermissions) {
+		return res = 0;
+	}
+	else return TECNICOFS_ERROR_PERMISSION_DENIED;
+}
+
+
+int closeFile(int fd) {
+	int res;
+	if(close(fd) == 0) return res = 0;
+	else return res = TECNICOFS_ERROR_OTHER;
+}
+
+
+int readFile(int inumber, permission mode, int bufferLen, char* buffer) {
+
+	int res;
+
+	ownerPermissions = (permission *) malloc(sizeof(permission*));
+	othersPermissions = (permission *) malloc(sizeof(permission*));
+	content = (char *) malloc(sizeof(char*));
+
+	inode_get(inumber, NULL, ownerPermissions, othersPermissions, content, 0);
+
+	if ((long)ownerPermissions < 2 || (long)othersPermissions < 2) {
+		return res = TECNICOFS_ERROR_INVALID_MODE;
+	}
+
+	else {
+		strncpy(buffer, content, bufferLen-1);			// -1 para nao ler o '\0'     ??????????????????
+		// buffer[bufferLen] = '\0';
+		return res = strlen(buffer);
+	}
+}
+
+
+
+int writeFile(int inumber, permission mode, char* dataInBuffer) {
+
+	int res;
+
+	ownerPermissions = (permission *) malloc(sizeof(permission*));
+	othersPermissions = (permission *) malloc(sizeof(permission*));
+	content = (char *) malloc(sizeof(char*));
+
+	inode_get(inumber, NULL, ownerPermissions, othersPermissions, content, 0);
+
+	if ((long)ownerPermissions < 2 || (long)othersPermissions < 2) {
+		return res = TECNICOFS_ERROR_INVALID_MODE;
+	}
+
+	if(inode_set(inumber, dataInBuffer, strlen(dataInBuffer)) == 0) return res = 0;
+	else return TECNICOFS_ERROR_OTHER;
+	
+}
 
 
 void print_tecnicofs_tree(FILE * fp, tecnicofs *fs, int numBuckets){
