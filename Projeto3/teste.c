@@ -96,23 +96,23 @@ int tfsClose(int fd) {
 
 
 
-// int tfsRead(int fd, char *buffer, int len) {
+int tfsRead(int fd, char *buffer, int len) {
     
-//     char str[MAXLEN];
-//     char res[MAXLEN];
-//     sprintf(str, "l %d %d%c", fd, len, '\0');
+    char str[MAXLEN];
+    char res[MAXLEN];
+    sprintf(str, "l %d %d%c", fd, len, '\0');
 
-//     write(sockfd, str, sizeof(char)*(strlen(str)+1));
-//     read(sockfd, &buffer, sizeof(int));                 // le o número de caracteres lidos (excluindo o ‘\0’)
-//     strcpy(res, buffer);
-//     if (*buffer == TECNICOFS_ERROR_FILE_NOT_OPEN) return TECNICOFS_ERROR_FILE_NOT_OPEN;
-//     else if (*buffer == TECNICOFS_ERROR_INVALID_MODE) return TECNICOFS_ERROR_INVALID_MODE;
-//     else {
-//         read(sockfd, &buffer, (sizeof(int))*len);           // le a string recebida
-//         strcat(res, buffer);
-//         return buffer;
-//     }
-// }
+    write(sockfd, str, sizeof(char)*(strlen(str)+1));
+    read(sockfd, &buffer, sizeof(int));                 // le o número de caracteres lidos (excluindo o ‘\0’)
+    strcpy(res, buffer);
+    if (*buffer == TECNICOFS_ERROR_FILE_NOT_OPEN) return TECNICOFS_ERROR_FILE_NOT_OPEN;
+    else if (*buffer == TECNICOFS_ERROR_INVALID_MODE) return TECNICOFS_ERROR_INVALID_MODE;
+    else {
+        read(sockfd, &buffer, (sizeof(int))*len);           // le a string recebida
+        strcat(res, buffer);
+        return buffer;
+    }
+}
 
 
 
