@@ -59,6 +59,7 @@ int tfsRename(char *filenameOld, char *filenameNew) {
     if(buffer == TECNICOFS_ERROR_FILE_NOT_FOUND) return TECNICOFS_ERROR_FILE_NOT_FOUND;
     else if(buffer == TECNICOFS_ERROR_FILE_ALREADY_EXISTS) return TECNICOFS_ERROR_FILE_ALREADY_EXISTS;
     else if(buffer == TECNICOFS_ERROR_PERMISSION_DENIED) return TECNICOFS_ERROR_PERMISSION_DENIED;
+    else if(buffer == TECNICOFS_ERROR_FILE_IS_OPEN) return TECNICOFS_ERROR_FILE_IS_OPEN;
     else return 0;
 }
 
@@ -182,6 +183,9 @@ int main(int argc, char** argv) {
 
     assert(tfsDelete("a") == TECNICOFS_ERROR_FILE_IS_OPEN);
     printf("Test Delete open file: done\n");
+
+    assert(tfsRename("a", "b") == TECNICOFS_ERROR_FILE_IS_OPEN);
+    printf("Test Rename Open File: done\n");
 
     assert((fd = tfsClose(0)) == 0);
     printf("Test Close: Done\n");

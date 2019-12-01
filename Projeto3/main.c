@@ -237,6 +237,9 @@ void* applyCommands(void *arg){
                 else if (lookRes2 != -1) {
                     res = TECNICOFS_ERROR_FILE_ALREADY_EXISTS;
                 }
+                else if(searchOFT(lookRes, oPT) == true) {          // CASO O FICHEIRO ESTEJA ABERTO
+                    res = TECNICOFS_ERROR_FILE_IS_OPEN;
+                }
                 else res = renameFile(fs, arg1, arg4, hashIdx, numBuckets, uid, lookRes);
                 break;
             case 'o':                                               // OPEN
