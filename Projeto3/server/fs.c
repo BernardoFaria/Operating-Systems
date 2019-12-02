@@ -24,12 +24,9 @@ char* content;
 int lenContent;
 
 
-
-int obtainNewInumber(tecnicofs* fs) {
-	int newInumber = ++(fs->nextINumber);
-	return newInumber;
-}
-
+/****************
+* new_tecnicofs *
+*****************/
 tecnicofs* new_tecnicofs(int numBuckets){
 	tecnicofs*fs = malloc(sizeof(tecnicofs));
 	if (!fs) {
@@ -37,19 +34,19 @@ tecnicofs* new_tecnicofs(int numBuckets){
 		exit(EXIT_FAILURE);
 	}
 	fs->nextINumber = 0;
-	fs->bstRoot = malloc(sizeof(node **)*numBuckets);		// malloc da hashtable
-	fs->bstLock = malloc(sizeof(syncMech)*numBuckets);		// malloce dos mecanismos de sincronizacao
+	fs->bstRoot = malloc(sizeof(node **)*numBuckets);		
+	fs->bstLock = malloc(sizeof(syncMech)*numBuckets);		
 
-	for(int i = 0; i < numBuckets; i++) {					// for que mete cada node da hash table a null
-		fs->bstRoot[i] = NULL;								// e inicializa um lock para cada bst
+	for(int i = 0; i < numBuckets; i++) {					
+		fs->bstRoot[i] = NULL;								
 		sync_init(&(fs->bstLock[i]));
 	}
 	return fs;
 }
 
-
-
-
+/*****************
+* free_tecnicofs *
+******************/
 void free_tecnicofs(tecnicofs* fs, int numBuckets) {
 	for(int i = 0; i < numBuckets; i++) {
 		free_tree(fs->bstRoot[i]);
@@ -59,34 +56,38 @@ void free_tecnicofs(tecnicofs* fs, int numBuckets) {
 }
 
 
-
+/*********
+* Create *
+**********/
 int create(tecnicofs* fs, char *name, int hashIdx, uid_t owner, permission ownerPerm, permission othersPerm){
 	sync_wrlock(&(fs->bstLock[hashIdx]));
-	int inumber = inode_create(owner, ownerPerm, othersPerm);
+	int inumber = inode_create(owner, ownerPerm, othersPerm);				// cria um inode
 	fs->bstRoot[hashIdx] = insert(fs->bstRoot[hashIdx], name, inumber);
 	sync_unlock(&(fs->bstLock[hashIdx]));
-	return inumber;  // pode ser -1
+	return inumber;
 }
 
 
 
-
+/*********
+* Delete *
+**********/
 int delete(tecnicofs* fs, char *name, int hashIdx, int inumberLook, uid_t uid){
 	sync_wrlock(&(fs->bstLock[hashIdx]));
 
 	int res;
 	ownerUID = (uid_t *) malloc(sizeof(uid_t*));
 
-	inode_get(inumberLook, ownerUID, NULL, NULL, NULL, 0);
+	inode_get(inumberLook, ownerUID, NULL, NULL, NULL, 0);		// retorna o ownerUID
 	
-	if((long)uid != (long)*ownerUID) {
+	if((long)uid != (long)*ownerUID) {							// se o cliente nao for o owner, da erro
 		res = TECNICOFS_ERROR_OTHER;
 		sync_unlock(&(fs->bstLock[hashIdx]));
 	}
 
-	else {
-		fs->bstRoot[hashIdx] = remove_item(fs->bstRoot[hashIdx], name);
-		res = inode_delete(inumberLook);
+	else {															     //se for, apaga o ficheiro da bst 
+		fs->bstRoot[hashIdx] = remove_item(fs->bstRoot[hashIdx], name);  // apaga o ficheiro da bst
+		res = inode_delete(inumberLook);								 // e da tabela de inodes
 		if(res != 0) res = TECNICOFS_ERROR_OTHER;
 		sync_unlock(&(fs->bstLock[hashIdx]));
 	}
@@ -95,7 +96,9 @@ int delete(tecnicofs* fs, char *name, int hashIdx, int inumberLook, uid_t uid){
 
 
 
-
+/*********
+* Lookup *
+**********/
 int lookup(tecnicofs* fs, char *name, int hashIdx){
 	sync_rdlock(&(fs->bstLock[hashIdx]));
 	int inumber = -1;
@@ -109,17 +112,19 @@ int lookup(tecnicofs* fs, char *name, int hashIdx){
 
 
 
-
+/*********
+* Rename *
+**********/
 int renameFile(tecnicofs* fs, char* actualName, char* newName, int hashIdxName, int numBuckets, uid_t uid, int inumberOld) {
 	sync_wrlock(&(fs->bstLock[hashIdxName]));
 
-	int hashIdxNewName = hash(newName, numBuckets);		// valor de hash do novo nome
+	int hashIdxNewName = hash(newName, numBuckets);		
 	int res;
 
 	ownerUID = (uid_t *) malloc(sizeof(uid_t*));
-	inode_get(inumberOld, ownerUID, NULL, NULL, NULL, 0);
+	inode_get(inumberOld, ownerUID, NULL, NULL, NULL, 0);		// retorna o ownerUID do ficheiro
 
-	if((long)uid != (long)*ownerUID) {
+	if((long)uid != (long)*ownerUID) {							// se o cliente nao for o owner, da erro
 		res = TECNICOFS_ERROR_PERMISSION_DENIED;
 		sync_unlock(&(fs->bstLock[hashIdxName]));
 	}
@@ -141,7 +146,9 @@ int renameFile(tecnicofs* fs, char* actualName, char* newName, int hashIdxName, 
 }
 
 
-
+/*************************************************
+* getPerm - transforma um inteiro numa permissao *
+**************************************************/
 permission getPerm(int perm) {
 	permission p;
 	if (perm == 1) return p = WRITE;
@@ -151,24 +158,27 @@ permission getPerm(int perm) {
 }
 
 
+/***********
+* readFile *
+************/
 int readFile(int inumber, int bufferLen, char* fContent) {
 
 	int res;
-	inode_get(inumber, NULL, NULL, NULL, fContent, bufferLen-1);
-	strcat(fContent, "\0");
+
+	inode_get(inumber, NULL, NULL, NULL, fContent, bufferLen-1);	// le o conteudo do ficheiro (len-1)
+	strcat(fContent, "\0");											// adiciona depois o \0
 	return res = strlen(fContent);
 }
 
 
-
+/************
+* writeFile *
+*************/
 int writeFile(int inumber, char* dataInBuffer) {
 
 	int res;
 	int len = strlen(dataInBuffer);
-	int resultado = inode_set(inumber, dataInBuffer, len);
-	content = (char *) malloc((sizeof(char*))*len);
-
-	inode_get(inumber, NULL, NULL, NULL, content, len);
+	int resultado = inode_set(inumber, dataInBuffer, len);			// atualiza o conteudo do ficheiro
 
 	if(resultado == -1) {
 		return res = TECNICOFS_ERROR_OTHER;
@@ -177,7 +187,9 @@ int writeFile(int inumber, char* dataInBuffer) {
 	
 }
 
-
+/************************
+* printf_tecnicofs_tree *
+*************************/
 void print_tecnicofs_tree(FILE * fp, tecnicofs *fs, int numBuckets){
 	for(int i = 0; i < numBuckets; i++) {
 		print_tree(fp, fs->bstRoot[i]);

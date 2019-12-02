@@ -12,36 +12,37 @@
 #include <sys/types.h>          
 #include <sys/socket.h>
 #include <pthread.h>
+#include <signal.h>
+#include <stdbool.h>
+#include <errno.h> 
 #include "fs.h"
 #include "constants.h"
 #include "lib/hash.h"
 #include "lib/timer.h"
 #include "sync.h"
-#include <signal.h>
 #include "lib/inodes.h"
 #include "../client/tecnicofs-client-api.h"
-#include <stdbool.h> 
 
 
+/* struct para o pthread_create */
 typedef struct threadArgs {
     uid_t uid;
     int clientSockete;
 } threadArgs;
 
 
+/* struct da tabela de ficheiros abertos */
 typedef struct openFilesTable {
     int inumber;
-    permission mode1;
-    permission mode2;
+    permission ownerPerm;
+    permission otherPerm;
 } openFilesTable;
-
-
 
 
 char* global_inputFile = NULL;
 char* global_outputFile = NULL;
 
-pthread_t tid[MAXTHREADS];
+pthread_t tid[MAXTHREADS];         
 
 char* nomesocket;
 int sockfd, socketclient, numBuckets;
@@ -49,9 +50,12 @@ int current_thread = 0;
 
 pthread_mutex_t commandsLock;
 tecnicofs* fs;
+
 uid_t *ownerUID;
 
-TIMER_T startTime, stopTime;
+TIMER_T startTime, stopTime;            // tempos
+
+static sigset_t sig_mask;               // sinal a bloquear
 
 
 static void displayUsage (const char* appName){
@@ -65,7 +69,6 @@ static void parseArgs (long argc, char* const argv[]){
         displayUsage(argv[0]);
     }
 }
-
 
 void errorParse(int lineNumber){
     fprintf(stderr, "Error: line %d invalid\n", lineNumber);
@@ -84,29 +87,63 @@ FILE * openOutputFile() {
 }
 
 
-/**************************************
- *          Funcao trataCtrlc         *
- *************************************/
+/**********************************************************
+ *                    Funcao trataCtrlc                   *   
+ * Funcao trata de receber o CTRL+C e terminar o programa * 
+ *********************************************************/
 
-void trataCtrlC(int s) {
-    for(int i = 0; i < current_thread; i++) {
-        if(pthread_join(tid[i], NULL))
-            exit(1);
-        tfsUnmount();
+void *trataCtrlc (void *arg) {
+    int sig_caught;             // signal capturado
+    int sigResult;              // resultado       
+
+    sigResult = sigwait(&sig_mask, &sig_caught);
+    if(sigResult != 0) {
+        perror("Erro");
     }
-    /* Termina o tempo */
-    TIMER_READ(stopTime);
-    printf("TecnicoFS completed in %.4f seconds.\n", TIMER_DIFF_SECONDS(startTime, stopTime));
-    close(sockfd);
+    
+    if(sig_caught == SIGINT) {
+        for(int i = 0; i < current_thread; i++) {
+            if(pthread_join(tid[i], NULL))
+                exit(1);
+            tfsUnmount();
+        }
+
+        close(sockfd);
+    
+        TIMER_READ(stopTime);       // termina o tempo
+        
+        printf("TecnicoFS completed in %.4f seconds.\n", TIMER_DIFF_SECONDS(startTime, stopTime));
+
+        FILE * outputFp = openOutputFile();
+
+        print_tecnicofs_tree(outputFp, fs, numBuckets);
+        fflush(outputFp);
+        fclose(outputFp);
+
+        inode_table_destroy();
+        mutex_destroy(&commandsLock);
+        free_tecnicofs(fs, numBuckets);
+    }
+
+    else {  // nao deveria acontecer
+        fprintf(stderr, "\nUnexpected signal %d\n", sig_caught);
+    }
     exit(EXIT_SUCCESS);
 }
 
 
 
-/****************************************************
- *                 Funcao searchOFT                 *
- *   Procura se determinado ficheiro está na tabela *
- ****************************************************/
+/*************************************************************************
+ *                          Funcao searchOFT  
+ *                                                                       *
+ *   Procura se determinado ficheiro está na tabela de ficheiros abertos *
+ *   Inputs:                                                             *
+ *      - fd: descritor de ficheiro                                      *
+ *      - tabela de ficheiros abertos                                    *
+ *   Outputs:                                                            *
+ *      - true se o ficheiro estiver na tabela                           *
+ *      - false se o ficheiro nao estiver na tabela                      *
+ ************************************************************************/
 
 bool searchOFT(int fd, struct openFilesTable **table) {
     for(int i = 0; i < MAXOPENFILES; i++) {
@@ -118,49 +155,63 @@ bool searchOFT(int fd, struct openFilesTable **table) {
 }
 
 
-/*******************************************************
- *                 Funcao deleteFromOFT                *
- *   Remove um ficheiro da tabela de ficheiros abertos *
- *******************************************************/
+/******************************************************************
+ *                 Funcao deleteFromOFT                           *
+ *                                                                *
+ *   Remove um ficheiro da tabela de ficheiros abertos            *
+ *   Inpus:                                                       *
+ *      - fd: descritor de ficheiro                               *
+ *      - tabela de ficheiros abertos                             *
+ *   Outputs:                                                     *
+ *      - se o ficheiro estiver na tabela, "reinicia" esse slot   *
+ *      - se o ficheiro não estiver na tabela, continua a procura *
+ ******************************************************************/
 
 int deleteFromOFT(int fd, struct openFilesTable **table) {
     for(int i = 0; i < MAXOPENFILES; i++) {
         if(table[i]->inumber == fd) {
             table[i]->inumber = -1;
-            table[i]->mode1 = NONE;
-            table[i]->mode2 = NONE;
+            table[i]->ownerPerm = NONE;
+            table[i]->otherPerm = NONE;
             return 0;
         }
     }
     return -1;
 }
 
-/*************************************************
- *               Funcao giveMode                 *
- *  Dado um fd, retorna o modo correspondente    *
- *************************************************/
+/***********************************************************
+ *                  Funcao giveOwnerMode                   *
+ *  Devolve o modo do ficheiro correspondente ao owner     *
+ ***********************************************************/
 
 permission giveOwnerMode(int fd, struct openFilesTable **table) {
     for(int i = 0; i < MAXOPENFILES; i++) {
         if(table[i]->inumber == fd) {
-            return table[i]->mode1;
+            return table[i]->ownerPerm;
         }
     }
     return NONE;
 }
 
+
+/***********************************************************
+ *                  Funcao giveOthersMode                  *
+ *  Devolve o modo do ficheiro correspondente ao others    *
+ ***********************************************************/
 permission giveOthersMode(int fd, struct openFilesTable **table) {
     for(int i = 0; i < MAXOPENFILES; i++) {
         if(table[i]->inumber == fd) {
-            return table[i]->mode2;
+            return table[i]->otherPerm;
         }
     }
     return NONE;
 }
 
+
 /*************************************************
  *               Funcao giveInumber              *
- *  Dado um fd, retorna o inumber correspondente *
+ *  Retorna o inumber correspondente ao ficheiro *
+ *  se estiver na tabela de ficheiros abertos    *
  *************************************************/
 
 int giveInumber(int fd, struct openFilesTable **table) {
@@ -173,22 +224,22 @@ int giveInumber(int fd, struct openFilesTable **table) {
 }
 
 
+
 void* applyCommands(void *arg){
 
     char buffer[MAXBUFFERSIZE];
-    int count = 0;
+    int count = 0;                                              // numero de ficheiros abertos na tabela
     uid_t uid = ((struct threadArgs*)arg)->uid;
-    // int sockete = ((struct threadArgs*)arg)->clientSockete;
 
 
-    /* tabela de ficheiros abertos */
+    /* tabela de ficheiros abertos: alocacao e inicializacao */
     openFilesTable **oPT;
     oPT = (struct openFilesTable**) malloc(sizeof(struct openFilesTable**) * MAXOPENFILES);
     for(int i = 0; i < MAXOPENFILES; i++) {
         oPT[i] = malloc(sizeof(openFilesTable));
         oPT[i]->inumber = -1;
-        oPT[i]->mode1 = NONE;
-        oPT[i]->mode2 = NONE;
+        oPT[i]->ownerPerm = NONE;
+        oPT[i]->otherPerm = NONE;
     }
 
     while(1){
@@ -199,11 +250,12 @@ void* applyCommands(void *arg){
         int res, arg2, arg3, lookRes, lookRes2; 
 
         int hashIdx = hash(arg1, numBuckets);   
-        char *content = malloc((sizeof(char*)*MAXBUFFERSIZE));                            // usado no comando READ
+        char *content = malloc((sizeof(char*)*MAXBUFFERSIZE));      // usado no comando READ
 
         /* Lê do cliente */
-        int n = read(socketclient, buffer, MAXBUFFERSIZE);
+        int n = read(socketclient, buffer, MAXBUFFERSIZE);          // caso nao haja nada para ler
         if(n == 0){
+            mutex_unlock(&commandsLock);
             return NULL;
         }
         sscanf(buffer, "%c", &token);    
@@ -212,6 +264,7 @@ void* applyCommands(void *arg){
             case 'c':                                               // CREATE
                 sscanf(buffer, "%c %s %d", &token, arg1, &arg2);    // c filename permissions
                 mutex_unlock(&commandsLock);
+
                 lookRes = lookup(fs, arg1, hashIdx);                // devolve inumber se existir ficheiro
 
                 int ownerPer = arg2/10;                             // ownerPermission
@@ -228,11 +281,13 @@ void* applyCommands(void *arg){
 
                 lookRes = lookup(fs, arg1, hashIdx);
 
-                if(lookRes == -1) {                                  // se o ficheiro nao existir, da erro
+                if(lookRes == -1) {                                 // se o ficheiro nao existir, da erro
                     res = TECNICOFS_ERROR_FILE_NOT_FOUND;
+                    break;
                 }
                 else if(searchOFT(lookRes, oPT) == true) {          // CASO O FICHEIRO ESTEJA ABERTO
                     res = TECNICOFS_ERROR_FILE_IS_OPEN;
+                    break;
                 }
                 else res = delete(fs, arg1, hashIdx, lookRes, uid);  // se existir, apaga
 
@@ -240,17 +295,21 @@ void* applyCommands(void *arg){
             case 'r':                                               // RENAME
                 sscanf(buffer, "%c %s %s", &token, arg1, arg4);     // r filenameOld filenameNew
                 mutex_unlock(&commandsLock);
+
                 lookRes = lookup(fs, arg1, hashIdx);
                 lookRes2 = lookup(fs, arg4, hashIdx);
 
-                if(lookRes == -1) {
+                if(lookRes == -1) {                                 // se nao existir, da erro
                     res = TECNICOFS_ERROR_FILE_NOT_FOUND;
+                    break;
                 }
-                else if (lookRes2 != -1) {
+                else if (lookRes2 != -1) {                          // se existir, da erro
                     res = TECNICOFS_ERROR_FILE_ALREADY_EXISTS;
+                    break;
                 }
                 else if(searchOFT(lookRes, oPT) == true) {          // CASO O FICHEIRO ESTEJA ABERTO
                     res = TECNICOFS_ERROR_FILE_IS_OPEN;
+                    break;
                 }
                 else res = renameFile(fs, arg1, arg4, hashIdx, numBuckets, uid, lookRes);
                 break;
@@ -260,12 +319,14 @@ void* applyCommands(void *arg){
                 
                 lookRes = lookup(fs, arg1, hashIdx);
 
-                if (lookRes == -1) {
+                if (lookRes == -1) {                                // se nao existir, da erro
                     res = TECNICOFS_ERROR_FILE_NOT_FOUND;
+                    break;
                 }
 
-                else if (count >= 5) {
+                else if (count >= 5) {                              // se a tabela estiver cheia, da erro
                     res = TECNICOFS_ERROR_MAXED_OPEN_FILES;
+                    break;
                 }
                 else {
                     uid_t *ownerUID = (uid_t *) malloc(sizeof(uid_t*));
@@ -273,26 +334,27 @@ void* applyCommands(void *arg){
                     permission *othersPermissions = (permission *) malloc(sizeof(permission*));
                     inode_get(lookRes, ownerUID, ownerPermissions, othersPermissions, NULL, 0);
 
-                    if(uid == *ownerUID) {
-                        if(arg2 == *ownerPermissions) {
+                    if(uid == *ownerUID) {                                  // se o cliente for o owner, executa o codigo
+                        if(arg2 == *ownerPermissions) {                     // permissoes para READ ou WRITE
                             oPT[count]->inumber = lookRes;
-                            oPT[count]->mode1 = arg2;
+                            oPT[count]->ownerPerm = arg2;
                             count++;
-                        } else if (*ownerPermissions == 3) {
+                        } else if (*ownerPermissions == 3) {                // permissoes para o RW
                             oPT[count]->inumber = lookRes;
-                            oPT[count]->mode1 = arg2;
+                            oPT[count]->ownerPerm = arg2;
                             count++;
                         } else {
                             res = TECNICOFS_ERROR_PERMISSION_DENIED;
+                            break;
                         }
-                    } else {
-                        if(arg2 == *othersPermissions) {
+                    } else {                                                // se o cliente for o others, executa o codigo
+                        if(arg2 == *othersPermissions) {                    // permissoes para READ ou WRITE
                             oPT[count]->inumber = lookRes;
-                            oPT[count]->mode2 = arg2;
+                            oPT[count]->otherPerm = arg2;
                             count++;
-                        } else if (*othersPermissions == 3) {
+                        } else if (*othersPermissions == 3) {               // permissoes para o RW
                             oPT[count]->inumber = lookRes;
-                            oPT[count]->mode2 = arg2;
+                            oPT[count]->otherPerm = arg2;
                             count++;
                         } else {
                             res = TECNICOFS_ERROR_PERMISSION_DENIED;
@@ -303,11 +365,13 @@ void* applyCommands(void *arg){
             case 'x':                                               // CLOSE
                 sscanf(buffer, "%c %d", &token, &arg2);             // x fd
                 mutex_unlock(&commandsLock);
-                if (searchOFT(arg2, oPT) == false) {
+
+                if (searchOFT(arg2, oPT) == false) {                // se o ficheiro nao estiver na tabela, da erro
                     res = TECNICOFS_ERROR_FILE_NOT_OPEN;
+                    break;
                 }
                 else {
-                    res = deleteFromOFT(arg2, oPT);
+                    res = deleteFromOFT(arg2, oPT);                 // se estiver, apaga
                     if(res == -1) res = TECNICOFS_ERROR_OTHER;
                 }
                 break;
@@ -316,7 +380,7 @@ void* applyCommands(void *arg){
                 mutex_unlock(&commandsLock);
 
                 lookRes = giveInumber(arg2, oPT);
-                if(lookRes == -1) {
+                if(lookRes == -1) {                                 // se nao estiver na tabela, da erro
                     res = TECNICOFS_ERROR_FILE_NOT_OPEN;
                     break;
                 }
@@ -324,18 +388,18 @@ void* applyCommands(void *arg){
                 ownerUID = (uid_t *) malloc(sizeof(uid_t*));
                 inode_get(lookRes, ownerUID, NULL, NULL, NULL, 0);
 
-                if (*ownerUID == uid) {
-                    if(giveOwnerMode(arg2, oPT) < 2) {
+                if (*ownerUID == uid) {                             // se o cliente for o owner, executa
+                    if(giveOwnerMode(arg2, oPT) < 2) {              // verifica se pode ler
                         res = TECNICOFS_ERROR_INVALID_MODE;
                         break;
                     }
-                } else {
-                    if(giveOthersMode(arg2, oPT) < 2) {
+                } else {                                            // se o cliente for o others, executa
+                    if(giveOthersMode(arg2, oPT) < 2) {             // verifica se pode ler
                         res = TECNICOFS_ERROR_INVALID_MODE;
                         break;
                     }
                 }
-                res = readFile(arg2, arg3, content);
+                res = readFile(arg2, arg3, content);                // executa a leitura
                 if(res < 0) res = TECNICOFS_ERROR_OTHER;
 
                 break;
@@ -345,27 +409,30 @@ void* applyCommands(void *arg){
 
                 lookRes = giveInumber(arg2, oPT);
 
-                if(lookRes == -1) {
+                if(lookRes == -1) {                                 // se nao existir, da erro
                     res = TECNICOFS_ERROR_FILE_NOT_FOUND;
                     break;
                 }
-                if (searchOFT(lookRes, oPT) == false) {
+                if (searchOFT(lookRes, oPT) == false) {             // se nao estiver na tabela, da erro
                     res = TECNICOFS_ERROR_FILE_NOT_OPEN;
+                    break;
                 } else {
                     ownerUID = (uid_t *) malloc(sizeof(uid_t*));
                     inode_get(lookRes, ownerUID, NULL, NULL, NULL, 0);
                     
-                    if (*ownerUID == uid) {
-                        if( (giveOwnerMode(arg2, oPT) == 0) || (giveOwnerMode(arg2, oPT) == 2) ) {
+                    if (*ownerUID == uid) {                                                             // se o cliente for o owner, executa
+                        if( (giveOwnerMode(arg2, oPT) == 0) || (giveOwnerMode(arg2, oPT) == 2) ) {      // verifica se nao pode escrever
                             res = TECNICOFS_ERROR_INVALID_MODE;
+                            break;
                         }
-                    } else {
-                        if( (giveOthersMode(arg2, oPT) == 0) || (giveOthersMode(arg2, oPT) == 2) ) {
+                    } else {                                                                            // se o cliente for o others, executa
+                        if( (giveOthersMode(arg2, oPT) == 0) || (giveOthersMode(arg2, oPT) == 2) ) {    // verifica se nao pode escrever
                             res = TECNICOFS_ERROR_INVALID_MODE;
+                            break;
                         }
                     }
                 
-                    res = writeFile(lookRes, arg1);
+                    res = writeFile(lookRes, arg1);                 // se puder, entao escreve
                 }
                 
                 break;
@@ -376,14 +443,13 @@ void* applyCommands(void *arg){
             }
         }
     
-        if(write(socketclient, &res, sizeof(int)) < 0) {
-            perror("Falhou no write");
+        if(write(socketclient, &res, sizeof(int)) < 0) {            // envia o resultado para o cliente
+            perror("Erro");
         }
-        if(content) {
-            write(socketclient, content, sizeof(char) * strlen(content));         // para ler o conteudo no READ
+        if(content) {                                                             // no caso do read, se houver conteudo, executa
+            write(socketclient, content, sizeof(char) * strlen(content));         // envia o conteudo para o cliente
         }
     }
-    puts("sai do apply");
     return NULL;
 }
 
@@ -398,23 +464,35 @@ int main(int argc, char* argv[]) {
     int servlen;
     struct sockaddr_un serverAddress; 
     struct ucred credentials;
-
-
-    /* Verifica se ocorreu ctrl+c */
-    signal(SIGINT, trataCtrlC);
-
+    pthread_t sigTID;                   // TID para o handler
+    int sigRes;                         // resultado do signal             
 
     /* nome do socket */
     nomesocket = argv[1];
 
+    /* nome do ficheiro de output */
+    global_outputFile = argv[2];
+
     /* numero de buckets */
     numBuckets = atoi(argv[3]);   
 
-
-    
     fs = new_tecnicofs(numBuckets);
     mutex_init(&commandsLock);
     inode_table_init();
+
+
+    /* Verifica se ocorreu ctrl+c */
+    sigemptyset(&sig_mask);
+    sigaddset(&sig_mask, SIGINT);
+    sigRes = pthread_sigmask(SIG_BLOCK, &sig_mask, NULL);
+    if (sigRes != 0) {
+        perror("Erro");
+    }
+
+    sigRes = pthread_create(&sigTID, NULL, trataCtrlc, NULL);
+    if (sigRes != 0) {
+        perror("Erro");
+    }
 
 
     /* criacao do socket do servidor */
@@ -430,6 +508,7 @@ int main(int argc, char* argv[]) {
     serverAddress.sun_family= AF_UNIX;
     strcpy(serverAddress.sun_path, nomesocket);
     servlen= strlen(serverAddress.sun_path) + sizeof(serverAddress.sun_family);
+    /* bind */
     if (bind(sockfd, (struct sockaddr_un *) &serverAddress, servlen) < 0) {
         perror("erro ao atribuir nome socket servidor");
     }
@@ -442,7 +521,6 @@ int main(int argc, char* argv[]) {
 
     /* ciclo para aceitar pedidos */
     for(;;) {
-
 
         /* aceita ligacao */
         if((socketclient = accept(sockfd, NULL, NULL)) < 0) {
@@ -464,20 +542,6 @@ int main(int argc, char* argv[]) {
         if(pthread_create(&tid[current_thread++], NULL, applyCommands, (void *)Allen) != 0 ) {
            printf("Failed to create thread\n");
         }
-
-        
     }
-
-    FILE * outputFp = openOutputFile();
-
-    print_tecnicofs_tree(outputFp, fs, numBuckets);
-    fflush(outputFp);
-    fclose(outputFp);
-
-    mutex_destroy(&commandsLock);
-    inode_table_destroy();
-    free_tecnicofs(fs, numBuckets);
-    
-    exit(EXIT_SUCCESS);
 }
 
