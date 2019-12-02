@@ -60,7 +60,7 @@ static void displayUsage (const char* appName){
 }
 
 static void parseArgs (long argc, char* const argv[]){
-    if (argc != 4) {                                        // passa a receber outro input
+    if (argc != 4) {                                        
         fprintf(stderr, "Invalid format:\n");
         displayUsage(argv[0]);
     }
@@ -200,6 +200,7 @@ void* applyCommands(void *arg){
 
         int hashIdx = hash(arg1, numBuckets);   
         char *content = malloc((sizeof(char*)*MAXBUFFERSIZE));                            // usado no comando READ
+
         /* Lê do cliente */
         int n = read(socketclient, buffer, MAXBUFFERSIZE);
         if(n == 0){
@@ -235,7 +236,6 @@ void* applyCommands(void *arg){
                 }
                 else res = delete(fs, arg1, hashIdx, lookRes, uid);  // se existir, apaga
 
-                printf("%d\n",res);
                 break;
             case 'r':                                               // RENAME
                 sscanf(buffer, "%c %s %s", &token, arg1, arg4);     // r filenameOld filenameNew

@@ -137,7 +137,7 @@ int tfsMount(char * address) {
     servlen= strlen(serv_addr.sun_path) + sizeof(serv_addr.sun_family);
 
     if(connect(sockfd,(struct sockaddr *) &serv_addr, servlen) < 0)
-        // perror("client:can't connect to server");
+        perror("erro:");
         return TECNICOFS_ERROR_OPEN_SESSION;
 
     return 0;
@@ -146,29 +146,10 @@ int tfsMount(char * address) {
 
 
 int tfsUnmount() {
-    puts("entrei");
     if(close(sockfd) == 0) {
-        puts("merda1");
         return 0;
     }
     else {
         return TECNICOFS_ERROR_NO_OPEN_SESSION;
     }
 }
-
-
-// int main(int argc, char** argv) {
-//      if (argc != 2) {
-//         printf("Usage: %s sock_path\n", argv[0]);
-//         exit(0);
-//     }
-//     assert(tfsMount(argv[1]) == 0);
-//     printf("Test: create file sucess");
-//     assert(tfsCreate("a", RW, READ) == 0);
-//     printf("Test: create file with name that already exists");
-//     assert(tfsCreate("a", RW, READ) == TECNICOFS_ERROR_FILE_ALREADY_EXISTS);
-//     assert(tfsUnmount() == 0);
-
-//     return 0;
-// }
-
