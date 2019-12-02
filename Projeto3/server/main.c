@@ -230,6 +230,7 @@ void* applyCommands(void *arg){
     char buffer[MAXBUFFERSIZE];
     int count = 0;                                              // numero de ficheiros abertos na tabela
     uid_t uid = ((struct threadArgs*)arg)->uid;
+    int socketclient = ((struct threadArgs*)arg)->clientSockete; 
 
 
     /* tabela de ficheiros abertos: alocacao e inicializacao */
