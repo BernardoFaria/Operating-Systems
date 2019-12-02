@@ -5,11 +5,11 @@
 #include "fs.h"
 #include "lib/bst.h"
 #include "lib/hash.h"
+#include "lib/inodes.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include "sync.h"
-#include "lib/inodes.h"
 #include <sys/types.h>
 #include <errno.h>
 #include <sys/stat.h>
@@ -59,7 +59,6 @@ void free_tecnicofs(tecnicofs* fs, int numBuckets) {
 }
 
 
-/* Modificado: passa também a criar um novo inode */
 
 int create(tecnicofs* fs, char *name, int hashIdx, uid_t owner, permission ownerPerm, permission othersPerm){
 	sync_wrlock(&(fs->bstLock[hashIdx]));
@@ -154,43 +153,12 @@ permission getPerm(int perm) {
 }
 
 
-int openFile(char *filename, int perm, uid_t uid, int inumber) {
-	int res;
-	permission p = getPerm(perm);
-
-	ownerPermissions = (permission *) malloc(sizeof(permission*));
-	othersPermissions = (permission *) malloc(sizeof(permission*));
-	inode_get(inumber, NULL, ownerPermissions, othersPermissions, NULL, 0);
-
-	if(p == *ownerPermissions) {
-		return 0;
-	}
-
-	else if(p == *othersPermissions) {
-		return res = 0;
-	}
-	else return TECNICOFS_ERROR_PERMISSION_DENIED;
-}
-
-
-int readFile(int inumber, int bufferLen, char* buffer) {
+int readFile(int inumber, int bufferLen, char* fContent) {
 
 	int res;
-
-	content = (char *) malloc(sizeof(char*));
-	// lenContent = (long int) malloc(sizeof(long int));
-	inode_get(inumber, NULL, NULL, NULL, content, 0);
-
-	strncpy(buffer, content, bufferLen);
-	// res = read(inumber, buffer, bufferLen);
-	res = strlen(buffer);
-
-	if(res < 0) {
-		res = TECNICOFS_ERROR_OTHER;
-	}
-
-	return res;
-
+	inode_get(inumber, NULL, NULL, NULL, fContent, bufferLen-1);
+	strcat(fContent, "\0");
+	return res = strlen(fContent);
 }
 
 
@@ -198,8 +166,15 @@ int readFile(int inumber, int bufferLen, char* buffer) {
 int writeFile(int inumber, char* dataInBuffer) {
 
 	int res;
+	int len = strlen(dataInBuffer);
+	int resultado = inode_set(inumber, dataInBuffer, len);
+	content = (char *) malloc((sizeof(char*))*len);
 
-	if(inode_set(inumber, dataInBuffer, strlen(dataInBuffer)) == -1) return res = TECNICOFS_ERROR_OTHER;
+	inode_get(inumber, NULL, NULL, NULL, content, len);
+
+	if(resultado == -1) {
+		return res = TECNICOFS_ERROR_OTHER;
+	}
 	else return res = 0;
 	
 }

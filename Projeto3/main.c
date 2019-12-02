@@ -2,7 +2,7 @@
 /* Bernardo Gonçalves de Faria - número 87636 */
 #define _GNU_SOURCE
 #define MAXTHREADS 100
-#define MAXBUFFERSIZE 140
+#define MAXBUFFERSIZE 300
 #define MAXOPENFILES 5
 
 #include <stdio.h>
@@ -31,7 +31,8 @@ typedef struct threadArgs {
 
 typedef struct openFilesTable {
     int inumber;
-    permission mode;
+    permission mode1;
+    permission mode2;
 } openFilesTable;
 
 
@@ -48,6 +49,9 @@ int current_thread = 0;
 
 pthread_mutex_t commandsLock;
 tecnicofs* fs;
+uid_t *ownerUID;
+
+TIMER_T startTime, stopTime;
 
 
 static void displayUsage (const char* appName){
@@ -90,6 +94,9 @@ void trataCtrlC(int s) {
             exit(1);
         tfsUnmount();
     }
+    /* Termina o tempo */
+    TIMER_READ(stopTime);
+    printf("TecnicoFS completed in %.4f seconds.\n", TIMER_DIFF_SECONDS(startTime, stopTime));
     close(sockfd);
     exit(EXIT_SUCCESS);
 }
@@ -120,7 +127,8 @@ int deleteFromOFT(int fd, struct openFilesTable **table) {
     for(int i = 0; i < MAXOPENFILES; i++) {
         if(table[i]->inumber == fd) {
             table[i]->inumber = -1;
-            table[i]->mode = NONE;
+            table[i]->mode1 = NONE;
+            table[i]->mode2 = NONE;
             return 0;
         }
     }
@@ -132,10 +140,19 @@ int deleteFromOFT(int fd, struct openFilesTable **table) {
  *  Dado um fd, retorna o modo correspondente    *
  *************************************************/
 
-permission giveMode(int fd, struct openFilesTable **table) {
+permission giveOwnerMode(int fd, struct openFilesTable **table) {
     for(int i = 0; i < MAXOPENFILES; i++) {
         if(table[i]->inumber == fd) {
-            return table[i]->mode;
+            return table[i]->mode1;
+        }
+    }
+    return NONE;
+}
+
+permission giveOthersMode(int fd, struct openFilesTable **table) {
+    for(int i = 0; i < MAXOPENFILES; i++) {
+        if(table[i]->inumber == fd) {
+            return table[i]->mode2;
         }
     }
     return NONE;
@@ -146,18 +163,14 @@ permission giveMode(int fd, struct openFilesTable **table) {
  *  Dado um fd, retorna o inumber correspondente *
  *************************************************/
 
-// int giveInumber(int fd, struct openFilesTable **table) {
-//     for(int i = 0; i < MAXOPENFILES; i++) {
-//         if(table[i]->fd == fd) {
-//             return table[i]->inumber;
-//         }
-//     }
-//     return -1;  // erro
-// }
-
-
-
-
+int giveInumber(int fd, struct openFilesTable **table) {
+    for(int i = 0; i < MAXOPENFILES; i++) {
+        if(table[i]->inumber == fd) {
+            return table[i]->inumber;
+        }
+    }
+    return -1;  // erro
+}
 
 
 void* applyCommands(void *arg){
@@ -174,11 +187,9 @@ void* applyCommands(void *arg){
     for(int i = 0; i < MAXOPENFILES; i++) {
         oPT[i] = malloc(sizeof(openFilesTable));
         oPT[i]->inumber = -1;
-        oPT[i]->mode = NONE;
+        oPT[i]->mode1 = NONE;
+        oPT[i]->mode2 = NONE;
     }
-
-
-
 
     while(1){
 
@@ -188,8 +199,7 @@ void* applyCommands(void *arg){
         int res, arg2, arg3, lookRes, lookRes2; 
 
         int hashIdx = hash(arg1, numBuckets);   
-        char *content = NULL;                            // usado no comando READ
-
+        char *content = malloc((sizeof(char*)*MAXBUFFERSIZE));                            // usado no comando READ
         /* Lê do cliente */
         int n = read(socketclient, buffer, MAXBUFFERSIZE);
         if(n == 0){
@@ -224,6 +234,8 @@ void* applyCommands(void *arg){
                     res = TECNICOFS_ERROR_FILE_IS_OPEN;
                 }
                 else res = delete(fs, arg1, hashIdx, lookRes, uid);  // se existir, apaga
+
+                printf("%d\n",res);
                 break;
             case 'r':                                               // RENAME
                 sscanf(buffer, "%c %s %s", &token, arg1, arg4);     // r filenameOld filenameNew
@@ -256,11 +268,35 @@ void* applyCommands(void *arg){
                     res = TECNICOFS_ERROR_MAXED_OPEN_FILES;
                 }
                 else {
-                    res = openFile(arg1, arg2, uid, lookRes);
-                    if (res == 0) {
-                        oPT[count]->inumber = lookRes;
-                        oPT[count]->mode = arg2;
-                        count++;
+                    uid_t *ownerUID = (uid_t *) malloc(sizeof(uid_t*));
+                    permission *ownerPermissions = (permission *) malloc(sizeof(permission*));
+                    permission *othersPermissions = (permission *) malloc(sizeof(permission*));
+                    inode_get(lookRes, ownerUID, ownerPermissions, othersPermissions, NULL, 0);
+
+                    if(uid == *ownerUID) {
+                        if(arg2 == *ownerPermissions) {
+                            oPT[count]->inumber = lookRes;
+                            oPT[count]->mode1 = arg2;
+                            count++;
+                        } else if (*ownerPermissions == 3) {
+                            oPT[count]->inumber = lookRes;
+                            oPT[count]->mode1 = arg2;
+                            count++;
+                        } else {
+                            res = TECNICOFS_ERROR_PERMISSION_DENIED;
+                        }
+                    } else {
+                        if(arg2 == *othersPermissions) {
+                            oPT[count]->inumber = lookRes;
+                            oPT[count]->mode2 = arg2;
+                            count++;
+                        } else if (*othersPermissions == 3) {
+                            oPT[count]->inumber = lookRes;
+                            oPT[count]->mode2 = arg2;
+                            count++;
+                        } else {
+                            res = TECNICOFS_ERROR_PERMISSION_DENIED;
+                        }
                     }
                 }
                 break;
@@ -278,29 +314,60 @@ void* applyCommands(void *arg){
             case 'l':                                               // READ
                 sscanf(buffer, "%c %d %d", &token, &arg2, &arg3);   // l fd len
                 mutex_unlock(&commandsLock);
-                if (searchOFT(arg2, oPT) == false) {
+
+                lookRes = giveInumber(arg2, oPT);
+                if(lookRes == -1) {
                     res = TECNICOFS_ERROR_FILE_NOT_OPEN;
+                    break;
                 }
-                else if(giveMode(arg2, oPT) < 2) {
-                    res = TECNICOFS_ERROR_INVALID_MODE;
+
+                ownerUID = (uid_t *) malloc(sizeof(uid_t*));
+                inode_get(lookRes, ownerUID, NULL, NULL, NULL, 0);
+
+                if (*ownerUID == uid) {
+                    if(giveOwnerMode(arg2, oPT) < 2) {
+                        res = TECNICOFS_ERROR_INVALID_MODE;
+                        break;
+                    }
+                } else {
+                    if(giveOthersMode(arg2, oPT) < 2) {
+                        res = TECNICOFS_ERROR_INVALID_MODE;
+                        break;
+                    }
                 }
-                else {
-                    res = readFile(arg2, arg3, content);
-                    if(res == -1) res = TECNICOFS_ERROR_OTHER;
-                }
+                res = readFile(arg2, arg3, content);
+                if(res < 0) res = TECNICOFS_ERROR_OTHER;
+
                 break;
             case 'w':                                               // WRITE
-                sscanf(buffer, "%c %d %s", &token, &arg2, arg1);   // w fd dataInBuffer
+                sscanf(buffer, "%c %d %s", &token, &arg2, arg1);    // w fd dataInBuffer
                 mutex_unlock(&commandsLock);
-                if (searchOFT(arg2, oPT) == false) {
+
+                lookRes = giveInumber(arg2, oPT);
+
+                if(lookRes == -1) {
+                    res = TECNICOFS_ERROR_FILE_NOT_FOUND;
+                    break;
+                }
+                if (searchOFT(lookRes, oPT) == false) {
                     res = TECNICOFS_ERROR_FILE_NOT_OPEN;
+                } else {
+                    ownerUID = (uid_t *) malloc(sizeof(uid_t*));
+                    inode_get(lookRes, ownerUID, NULL, NULL, NULL, 0);
+                    
+                    if (*ownerUID == uid) {
+                        if( (giveOwnerMode(arg2, oPT) == 0) || (giveOwnerMode(arg2, oPT) == 2) ) {
+                            res = TECNICOFS_ERROR_INVALID_MODE;
+                        }
+                    } else {
+                        if( (giveOthersMode(arg2, oPT) == 0) || (giveOthersMode(arg2, oPT) == 2) ) {
+                            res = TECNICOFS_ERROR_INVALID_MODE;
+                        }
+                    }
+                
+                    res = writeFile(lookRes, arg1);
                 }
-                else if(giveMode(arg2, oPT) != 1 || giveMode(arg2, oPT) != 3) {
-                    res = TECNICOFS_ERROR_INVALID_MODE;
-                }
-                else {
-                    res = writeFile(arg2, arg1);
-                }
+                
                 break;
             default: { /* error */
                 mutex_unlock(&commandsLock);
@@ -308,11 +375,13 @@ void* applyCommands(void *arg){
                 exit(EXIT_FAILURE);
             }
         }
-    if(write(socketclient, &res, sizeof(int)) < 0) {
-        perror("Falhou no write");
-    }
-    // if(content) write(socketclient, content, sizeof(char)*res);         // para ler o conteudo no READ
-
+    
+        if(write(socketclient, &res, sizeof(int)) < 0) {
+            perror("Falhou no write");
+        }
+        if(content) {
+            write(socketclient, content, sizeof(char) * strlen(content));         // para ler o conteudo no READ
+        }
     }
     puts("sai do apply");
     return NULL;
@@ -329,7 +398,6 @@ int main(int argc, char* argv[]) {
     int servlen;
     struct sockaddr_un serverAddress; 
     struct ucred credentials;
-    TIMER_T startTime, stopTime;
 
 
     /* Verifica se ocorreu ctrl+c */
@@ -400,10 +468,6 @@ int main(int argc, char* argv[]) {
         
     }
 
-    /* Termina o tempo */
-    TIMER_READ(stopTime);
-    printf("TecnicoFS completed in %.4f seconds.\n", TIMER_DIFF_SECONDS(startTime, stopTime));
-    
     FILE * outputFp = openOutputFile();
 
     print_tecnicofs_tree(outputFp, fs, numBuckets);

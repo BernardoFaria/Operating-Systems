@@ -6,12 +6,10 @@
 #include <sys/socket.h>
 #include <assert.h>
 
-#define MAXLEN 140
+#define MAXLEN 100000
 
 int sockfd;
 int buffer;
-
-
 
 
 int tfsCreate(char *filename, permission ownerPermissions, permission othersPermissions) {
@@ -35,6 +33,7 @@ int tfsDelete(char *filename) {
     read(sockfd, &buffer, sizeof(int));
     if(buffer == TECNICOFS_ERROR_FILE_NOT_FOUND) return TECNICOFS_ERROR_FILE_NOT_FOUND;
     else if(buffer == TECNICOFS_ERROR_OTHER) return TECNICOFS_ERROR_OTHER;
+    else if(buffer == TECNICOFS_ERROR_FILE_IS_OPEN) return TECNICOFS_ERROR_FILE_IS_OPEN;
     else return 0;
 }
 
@@ -50,7 +49,9 @@ int tfsRename(char *filenameOld, char *filenameNew) {
     write(sockfd, str, sizeof(char)*(strlen(str)+1));
     read(sockfd, &buffer, sizeof(int));
     if(buffer == TECNICOFS_ERROR_FILE_NOT_FOUND) return TECNICOFS_ERROR_FILE_NOT_FOUND;
-    else if (buffer == TECNICOFS_ERROR_FILE_ALREADY_EXISTS) return TECNICOFS_ERROR_FILE_ALREADY_EXISTS;
+    else if(buffer == TECNICOFS_ERROR_FILE_ALREADY_EXISTS) return TECNICOFS_ERROR_FILE_ALREADY_EXISTS;
+    else if(buffer == TECNICOFS_ERROR_PERMISSION_DENIED) return TECNICOFS_ERROR_PERMISSION_DENIED;
+    else if(buffer == TECNICOFS_ERROR_FILE_IS_OPEN) return TECNICOFS_ERROR_FILE_IS_OPEN;
     else return 0;
 }
 
@@ -79,39 +80,50 @@ int tfsClose(int fd) {
 
     write(sockfd, str, sizeof(char)*(strlen(str)+1));
     read(sockfd, &buffer, sizeof(int));
-    return 0;
+    if (buffer == TECNICOFS_ERROR_FILE_NOT_OPEN) return TECNICOFS_ERROR_FILE_NOT_OPEN;
+    else if (buffer == TECNICOFS_ERROR_OTHER) return TECNICOFS_ERROR_OTHER;
+    else return 0;
 }
 
 
 
 
-int tfsRead(int fd, char *buffer, int len) {
+int tfsRead(int fd, char *buff, int len) {
     
     char str[MAXLEN];
     sprintf(str, "l %d %d%c", fd, len, '\0');
 
     write(sockfd, str, sizeof(char)*(strlen(str)+1));
-    read(sockfd, &buffer, sizeof(int));
-    return 0;
+    read(sockfd, &buffer, (sizeof(int)));                 // le o número de caracteres lidos (excluindo o ‘\0’)
+    if (buffer == TECNICOFS_ERROR_FILE_NOT_OPEN) return TECNICOFS_ERROR_FILE_NOT_OPEN;
+    else if (buffer == TECNICOFS_ERROR_INVALID_MODE) return TECNICOFS_ERROR_INVALID_MODE;
+    else if(buffer == TECNICOFS_ERROR_OTHER) return TECNICOFS_ERROR_OTHER;
+    else {
+        read(sockfd, buff, (sizeof(char*))*buffer);           // le a string recebida
+        return buffer;
+    }
 }
 
 
 
 
-int tfsWrite(int fd, char *buffer, int len) {
-
+int tfsWrite(int fd, char *buff, int len) {
     char str[MAXLEN];
-    sprintf(str, "w %d %s%c", fd, buffer, '\0');
+    char res[len];
+    strncpy(res, buff, len);
+    sprintf(str, "w %d %s%c", fd, res, '\0');
 
     write(sockfd, str, sizeof(char)*(strlen(str)+1));
     read(sockfd, &buffer, sizeof(int));
-    return 0;
+    if (buffer == TECNICOFS_ERROR_INVALID_MODE) return TECNICOFS_ERROR_INVALID_MODE;
+    else if (buffer == TECNICOFS_ERROR_FILE_NOT_OPEN) return TECNICOFS_ERROR_FILE_NOT_OPEN;
+    else if (buffer == TECNICOFS_ERROR_OTHER) return TECNICOFS_ERROR_OTHER;
+    else return 0;
 }
 
 
 
 int tfsMount(char * address) {
-
     int servlen;
     struct sockaddr_un serv_addr;
 
@@ -134,13 +146,15 @@ int tfsMount(char * address) {
 
 
 int tfsUnmount() {
-
+    puts("entrei");
     if(close(sockfd) == 0) {
+        puts("merda1");
         return 0;
     }
-    else return TECNICOFS_ERROR_NO_OPEN_SESSION;
+    else {
+        return TECNICOFS_ERROR_NO_OPEN_SESSION;
+    }
 }
-
 
 
 // int main(int argc, char** argv) {

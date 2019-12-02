@@ -4,7 +4,7 @@
 #define FS_H
 #include "lib/bst.h"
 #include "sync.h"
-#include "tecnicofs-api-constants.h"
+#include "tecnicofs-client-api.h"
 // #include "lib/hash.h" // adiciona lib
 
 typedef struct tecnicofs {
@@ -22,7 +22,7 @@ int lookup(tecnicofs* fs, char *name, int hashValue);                           
 int renameFile(tecnicofs* fs, char* actualName, char* newName, int hashIdxName, int numBuckets, uid_t uid, int inumberOld);     // void ->int
 permission getPerm(int perm);                                                                                                   // new function
 int openFile(char *filename, int perm, uid_t uid, int inumber);                                                                 // new function
-int readFile(int inumber, int bufferLen, char* buffer);                                                                         // new function
+int readFile(int inumber, int bufferLen, char* fContent);                                                           // new function
 int writeFile(int inumber, char* dataInBuffer);                                                                                 // new function
 void print_tecnicofs_tree(FILE * fp, tecnicofs *fs, int numBuckets);
 

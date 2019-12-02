@@ -8,7 +8,7 @@
 #include <fcntl.h>
 
 
-#define MAXLEN 140
+#define MAXLEN 100000
 
 int sockfd;
 int buffer;
@@ -99,30 +99,27 @@ int tfsClose(int fd) {
 int tfsRead(int fd, char *buff, int len) {
     
     char str[MAXLEN];
-    // char res[MAXLEN];
     sprintf(str, "l %d %d%c", fd, len, '\0');
 
     write(sockfd, str, sizeof(char)*(strlen(str)+1));
-    read(sockfd, &buffer, (sizeof(int))*len);                 // le o número de caracteres lidos (excluindo o ‘\0’)
-    // strcpy(res, buffer);
+    read(sockfd, &buffer, (sizeof(int)));                 // le o número de caracteres lidos (excluindo o ‘\0’)
     if (buffer == TECNICOFS_ERROR_FILE_NOT_OPEN) return TECNICOFS_ERROR_FILE_NOT_OPEN;
     else if (buffer == TECNICOFS_ERROR_INVALID_MODE) return TECNICOFS_ERROR_INVALID_MODE;
     else if(buffer == TECNICOFS_ERROR_OTHER) return TECNICOFS_ERROR_OTHER;
-    else return buffer;
-    // else {
-    //     read(sockfd, &buffer, (sizeof(int))*len);           // le a string recebida
-    //     strcat(res, buffer);
-    //     return buffer;
-    // }
+    else {
+        read(sockfd, buff, (sizeof(char*))*buffer);           // le a string recebida
+        return buffer;
+    }
 }
 
 
 
 
 int tfsWrite(int fd, char *buff, int len) {
-
     char str[MAXLEN];
-    sprintf(str, "w %d %s%c", fd, buff, '\0');
+    char res[len];
+    strncpy(res, buff, len);
+    sprintf(str, "w %d %s%c", fd, res, '\0');
 
     write(sockfd, str, sizeof(char)*(strlen(str)+1));
     read(sockfd, &buffer, sizeof(int));
@@ -157,60 +154,46 @@ int tfsMount(char * address) {
 
 
 int tfsUnmount() {
-
+    puts("entrei");
     if(close(sockfd) == 0) {
+        puts("merda1");
         return 0;
     }
-    else return TECNICOFS_ERROR_NO_OPEN_SESSION;
+    else {
+        return TECNICOFS_ERROR_NO_OPEN_SESSION;
+    }
 }
 
 
 
 int main(int argc, char** argv) {
-     if (argc != 2) {
+    if (argc != 2) {
         printf("Usage: %s sock_path\n", argv[0]);
         exit(0);
     }
-
+    
     char readBuffer[4] = {0};
 
     assert(tfsMount(argv[1]) == 0);
-    printf("Test Mount: Done\n");
 
-    assert(tfsCreate("a", RW, READ) == 0 );
-    printf("Test Create: Done\n");
+    assert(tfsCreate("abc", RW, READ) == 0 );
 
-    assert(tfsCreate("b", RW, READ) == 0 );
-    printf("Test Create: Done\n");
-
-    assert(tfsCreate("c", RW, READ) == 0 );
-    printf("Test Create: Done\n");
-
-    assert(tfsCreate("a", RW, READ) == TECNICOFS_ERROR_FILE_ALREADY_EXISTS );
-    printf("Test Create: Done\n");
-
-    assert(tfsDelete("c") == 0 );
-    printf("Test Delete: Done\n");
-
-    assert(tfsDelete("b") == 0 );
-    printf("Test Delete: Done\n");
-
-
-    assert(tfsRename("a", "bcd") == 0);
-    printf("Test Rename: Done\n");
+    assert(tfsRename("abc", "bcd") == 0);
 
     int fd = -1;
     assert((fd = tfsOpen("bcd", RW)) == 0);
-    printf("Test Open: Done\n");
 
-    assert(tfsDelete("bcd") == TECNICOFS_ERROR_FILE_IS_OPEN );
-    printf("Test Delete: Done\n");
+    assert(tfsWrite(fd, "hmm", 3) == 0);
 
-    assert((fd = tfsClose(0)) == 0);
-    printf("Test Close: Done\n");
-    
-    puts("acabou o teste");
+    assert(tfsRead(fd, readBuffer, 4) == 3);
+
+    puts(readBuffer);
+
+    assert(tfsClose(fd) == 0);
+
+    assert(tfsDelete("bcd") == 0);
+
     assert(tfsUnmount() == 0);
+
     return 0;
 }
-

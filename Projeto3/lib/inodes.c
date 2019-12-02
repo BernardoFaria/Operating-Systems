@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include "inodes.h"
-#include "../tecnicofs-api-constants.h"
+// #include "client/tecnicofs-api-constants.h"
 
 inode_t inode_table[INODE_TABLE_SIZE];
 pthread_mutex_t inode_table_lock;
