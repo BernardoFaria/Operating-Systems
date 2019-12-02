@@ -136,9 +136,10 @@ int tfsMount(char * address) {
     strcpy(serv_addr.sun_path, address);
     servlen= strlen(serv_addr.sun_path) + sizeof(serv_addr.sun_family);
 
-    if(connect(sockfd,(struct sockaddr *) &serv_addr, servlen) < 0)
+    if(connect(sockfd,(struct sockaddr *) &serv_addr, servlen) < 0) {
         perror("erro:");
         return TECNICOFS_ERROR_OPEN_SESSION;
+    }
 
     return 0;
 }

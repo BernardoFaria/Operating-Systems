@@ -3,7 +3,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "../tecnicofs-api-constants.h"
+#include "../../client/tecnicofs-api-constants.h"
 
 #define FREE_INODE -1
 #define INODE_TABLE_SIZE 50

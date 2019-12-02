@@ -4,8 +4,7 @@
 #define FS_H
 #include "lib/bst.h"
 #include "sync.h"
-#include "tecnicofs-client-api.h"
-// #include "lib/hash.h" // adiciona lib
+#include "../client/tecnicofs-client-api.h"
 
 typedef struct tecnicofs {
     node** bstRoot;         // passa a ser um vetor de nodes

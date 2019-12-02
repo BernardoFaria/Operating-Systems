@@ -1,5 +1,5 @@
-#include "tecnicofs-api-constants.h"
-#include "tecnicofs-client-api.h"
+#include "../client/tecnicofs-api-constants.h"
+#include "../client/tecnicofs-client-api.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
     assert(tfsRead(fd, readBuffer, 6) == TECNICOFS_ERROR_INVALID_MODE);
 
 
-    assert(tfsDelete("abc") == 0);
+    assert(tfsDelete("abc") == TECNICOFS_ERROR_FILE_IS_OPEN);
     assert(tfsUnmount() == 0);
 
     return 0;

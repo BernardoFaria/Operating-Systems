@@ -1,5 +1,5 @@
-#include "tecnicofs-api-constants.h"
-#include "tecnicofs-client-api.h"
+#include "../client/tecnicofs-api-constants.h"
+#include "../client/tecnicofs-client-api.h"
 #include <sys/un.h>
 #include <unistd.h>
 #include <sys/types.h>          
@@ -154,9 +154,7 @@ int tfsMount(char * address) {
 
 
 int tfsUnmount() {
-    puts("entrei");
     if(close(sockfd) == 0) {
-        puts("merda1");
         return 0;
     }
     else {

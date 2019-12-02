@@ -19,7 +19,7 @@
 #include "sync.h"
 #include <signal.h>
 #include "lib/inodes.h"
-#include "tecnicofs-client-api.h"
+#include "../client/tecnicofs-client-api.h"
 #include <stdbool.h> 
 
 

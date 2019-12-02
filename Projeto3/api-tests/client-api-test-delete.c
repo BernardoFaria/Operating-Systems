@@ -1,5 +1,5 @@
-#include "tecnicofs-api-constants.h"
-#include "tecnicofs-client-api.h"
+#include "../client/tecnicofs-api-constants.h"
+#include "../client/tecnicofs-client-api.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
